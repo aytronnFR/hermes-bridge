@@ -38,3 +38,11 @@ The health check is available at `http://localhost:8080/actuator/health`.
 
 See [docs/alexa-skill.md](docs/alexa-skill.md) for the Alexa setup and [docs/architecture.md](docs/architecture.md) for the current boundary.
 
+## Smoke test
+
+With the bridge running, execute from the repository root:
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+

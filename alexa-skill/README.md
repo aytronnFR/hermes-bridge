@@ -21,9 +21,11 @@ POST ${BRIDGE_URL}/v1/channels/alexa/turn
 
 It sends the recognized text and Alexa request metadata, then speaks the returned `text` field.
 
-## ASK CLI
+## ASK CLI and Alexa-hosted deployment
 
-Install and configure ASK CLI v2, then from this directory deploy the development resources:
+The repository uses the ASK CLI v2 package layout so that the manifest, interaction model, and Lambda source remain versioned. For the Alexa-hosted skill created in the Developer Console, synchronize this directory through the skill's Git workflow and test it in the development stage.
+
+If the skill is later moved to an AWS-hosted Lambda deployment, install and configure ASK CLI v2 and run from this directory:
 
 ```powershell
 ask deploy
@@ -37,4 +39,3 @@ Alexa, envoie bonjour
 ```
 
 The expected response is `Bien reçu chef`.
-
