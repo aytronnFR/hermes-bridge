@@ -1,0 +1,15 @@
+.gradle/
+bridge/.gradle/
+bridge/build/
+**/out/
+.idea/
+*.iml
+.vscode/
+node_modules/
+coverage/
+.ask/
+.tools/
+.env
+.env.*
+!.env.example
+*.log
