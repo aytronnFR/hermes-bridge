@@ -2,7 +2,7 @@ const Alexa = require('ask-sdk-core');
 
 const BRIDGE_URL = process.env.BRIDGE_URL;
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
-const BRIDGE_TIMEOUT_MS = 7000;
+const BRIDGE_TIMEOUT_MS = 55_000;
 
 const LaunchRequestHandler = {
   canHandle(handlerInput) {
