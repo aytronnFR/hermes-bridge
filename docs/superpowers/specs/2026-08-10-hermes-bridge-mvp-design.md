@@ -45,6 +45,9 @@ hermes-bridge/
 - One endpoint: `POST /v1/channels/alexa/turn`.
 - One operational endpoint: `GET /actuator/health`.
 - No database, Hermes call, OAuth, or external identity provider.
+- Logback remains the logging backend and emits structured ECS JSON to stdout for Loki/Grafana ingestion.
+- Logs include stable service metadata and safe correlation fields such as `channel`, `requestId`, and `deviceId` when present.
+- Request text, authorization material, and other sensitive payloads are not logged.
 
 The Alexa endpoint accepts a JSON object with `text` and optional `deviceId`, `sessionId`, and `requestId` strings. A valid request returns HTTP 200:
 
@@ -57,6 +60,8 @@ The Alexa endpoint accepts a JSON object with `text` and optional `deviceId`, `s
 Malformed JSON or invalid fields return HTTP 400 using a documented error shape. The service logs request metadata without secrets or full sensitive content.
 
 The endpoint is intentionally suitable for development testing only. Production exposure must add authentication, rate limiting, request-size limits, and HTTPS enforcement.
+
+The logging configuration is documented and verified as one JSON object per line. Grafana/Loki is expected to collect container stdout rather than application-managed log files.
 
 ## Alexa Skill
 
