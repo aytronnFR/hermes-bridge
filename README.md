@@ -40,7 +40,7 @@ Hermes Agent already provides the agent runtime and its own communication surfac
 
 ```text
 hermes-bridge/
-├── bridge/          # Java 21, Spring Boot WebFlux HTTP service
+├── bridge/          # Java 25, Spring Boot WebFlux HTTP service
 ├── alexa-skill/     # Versioned Alexa model and Node.js Lambda adapter
 ├── dashboard/       # Reserved for the future configuration UI
 ├── landing-page/    # Reserved for the future public website
@@ -52,7 +52,7 @@ hermes-bridge/
 
 Requirements:
 
-- Java 21;
+- Java 25;
 - PowerShell on Windows, or an equivalent shell on other platforms;
 - Node.js 20+ for the Alexa adapter tests.
 

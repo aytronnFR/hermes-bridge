@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
 
       - name: Verify Spring bridge
         working-directory: bridge
@@ -44,4 +44,3 @@ jobs:
       - name: Validate Alexa JSON resources
         working-directory: alexa-skill
         run: node --input-type=module -e "import { readFileSync } from 'node:fs'; for (const file of ['skill-package/skill.json', 'skill-package/interactionModels/custom/fr-FR.json', 'ask-resources.json']) JSON.parse(readFileSync(file, 'utf8')); console.log('Alexa JSON valid')"
-
