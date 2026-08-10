@@ -111,13 +111,19 @@ container from the repository root with:
 .\scripts\smoke-test.ps1
 ```
 
-On every push to `main`, GitHub Actions publishes the image to the GitHub
-Container Registry with the following tags:
+On every successful service build on `main`, GitHub Actions publishes a
+candidate image to the GitHub Container Registry with the following tags:
 
 ```text
 ghcr.io/aytronnfr/hermes-bridge:latest
 ghcr.io/aytronnfr/hermes-bridge:<commit-sha>
 ```
+
+The `latest` tag is only used by the release workflow to resolve the most
+recent validated candidate. ArgoCD never consumes `latest`: the release job
+reads the image revision label and writes the immutable commit SHA to
+`green-infra`. Infrastructure is updated only when every selected service in
+the matrix has passed.
 
 For infrastructure deployments, prefer the immutable commit-SHA tag:
 
