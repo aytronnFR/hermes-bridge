@@ -205,8 +205,9 @@ jobs:
               exit 1
             fi
 
-            IMAGE_TAG="${revision}" yq -i '.image.tag = strenv(IMAGE_TAG) | .image.tag style="double"' "${values_file}"
-            echo "Resolved ${image} to ${revision} in ${values_file}"
+            short_revision="${revision:0:7}"
+            IMAGE_TAG="${short_revision}" yq -i '.image.tag = strenv(IMAGE_TAG) | .image.tag style="double"' "${values_file}"
+            echo "Resolved ${image} to ${short_revision} in ${values_file}"
           done < <(jq -c '.[]' <<<"${SERVICES_JSON}")
 
           git config user.name "ci-bot"
