@@ -1,0 +1,10 @@
+.gradle/
+build/
+.idea/
+*.iml
+.tools/
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose*.yml

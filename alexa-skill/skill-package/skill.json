@@ -1,0 +1,32 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": ""
+        }
+      }
+    },
+    "publishingInformation": {
+      "locales": {
+        "fr-FR": {
+          "name": "Hermes",
+          "summary": "Connecte Alexa à Hermes Agent.",
+          "description": "Transmet des messages texte à Hermes Agent depuis Alexa.",
+          "examplePhrases": [
+            "Alexa, ouvre Hermes",
+            "Alexa, demande à Hermes d'envoyer bonjour",
+            "Alexa, dis à Hermes bonjour"
+          ],
+          "keywords": ["Hermes", "assistant", "intelligence artificielle"]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "distributionCountries": [],
+      "category": "PRODUCTIVITY",
+      "testingInstructions": "Dire : Alexa, ouvre Hermes, puis demander à Hermes d'envoyer bonjour. La Skill doit répondre Bien reçu chef."
+    }
+  }
+}
+

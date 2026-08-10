@@ -1,0 +1,238 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: aytronnfr
+
+jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed_services: ${{ steps.set-matrix.outputs.changed_services }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed components
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            bridge:
+              - 'bridge/**'
+              - '.github/workflows/ci.yml'
+            alexa:
+              - 'alexa-skill/**'
+              - '.github/workflows/ci.yml'
+
+      - name: Build service matrix
+        id: set-matrix
+        shell: bash
+        env:
+          BRIDGE_CHANGED: ${{ steps.filter.outputs.bridge }}
+          ALEXA_CHANGED: ${{ steps.filter.outputs.alexa }}
+        run: |
+          set -euo pipefail
+
+          changed_services='[]'
+          if [[ "${BRIDGE_CHANGED}" == "true" ]]; then
+            changed_services="$(jq -c '. + ["bridge"]' <<<"${changed_services}")"
+          fi
+          if [[ "${ALEXA_CHANGED}" == "true" ]]; then
+            changed_services="$(jq -c '. + ["alexa"]' <<<"${changed_services}")"
+          fi
+
+          echo "changed_services=${changed_services}" >> "${GITHUB_OUTPUT}"
+          echo "Changed services: ${changed_services}"
+
+  service:
+    name: service (${{ matrix.name }})
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bridge
+            component: bridge
+            kind: java
+            image: hermes-bridge
+          - name: alexa-skill
+            component: alexa
+            kind: node
+            image: ''
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify Spring bridge
+        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        working-directory: bridge
+        run: ./gradlew clean test
+
+      - name: Set up Node.js
+        if: matrix.kind == 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: alexa-skill/lambda/package-lock.json
+
+      - name: Verify Alexa adapter
+        if: matrix.kind == 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
+        working-directory: alexa-skill/lambda
+        run: |
+          npm ci
+          npm test
+          npm run check
+
+      - name: Validate Alexa JSON resources
+        if: matrix.kind == 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
+        working-directory: alexa-skill
+        run: node --input-type=module -e "import { readFileSync } from 'node:fs'; for (const file of ['skill-package/skill.json', 'skill-package/interactionModels/custom/fr-FR.json', 'ask-resources.json']) JSON.parse(readFileSync(file, 'utf8')); console.log('Alexa JSON valid')"
+
+      - name: Log in to GitHub Container Registry
+        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component) && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=main-,format=short
+
+      - name: Build and publish candidate image
+        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./bridge
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  release:
+    name: publish release
+    needs: [changes, service]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.service.result == 'success' && needs.changes.outputs.changed_services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: green-infra-release
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check out infrastructure repository
+        uses: actions/checkout@v5
+        with:
+          repository: aytronnFR/green-infra
+          token: ${{ secrets.INFRA_TOKEN }}
+          ref: main
+          path: infra
+
+      - name: Install yq
+        shell: bash
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Resolve candidate images and update infrastructure
+        working-directory: infra
+        shell: bash
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
+          SERVICES_JSON: >-
+            [{"image":"hermes-bridge","values_file":"apps/hermes-bridge/values.yaml"}]
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r service; do
+            image_name="$(jq -r '.image' <<<"${service}")"
+            values_file="$(jq -r '.values_file' <<<"${service}")"
+            image="${REGISTRY}/${IMAGE_NAMESPACE}/${image_name}:latest"
+
+            if [[ ! -f "${values_file}" ]]; then
+              echo "::error file=${values_file}::Infrastructure values file is missing"
+              exit 1
+            fi
+
+            docker pull "${image}"
+            revision="$(docker inspect --format='{{index .Config.Labels "org.opencontainers.image.revision"}}' "${image}")"
+            if [[ -z "${revision}" || "${revision}" == "<no value>" ]]; then
+              echo "::error::No source revision label found on ${image}"
+              exit 1
+            fi
+
+            short_revision="${revision:0:7}"
+            image_tag="main-${short_revision}"
+            IMAGE_TAG="${image_tag}" yq -i '.image.tag = strenv(IMAGE_TAG) | .image.tag style="double"' "${values_file}"
+            echo "Resolved ${image} to ${image_tag} in ${values_file}"
+          done < <(jq -c '.[]' <<<"${SERVICES_JSON}")
+
+          git config user.name "ci-bot"
+          git config user.email "ci@aytronn.com"
+          git add apps/hermes-bridge/values.yaml
+
+          if git diff --cached --quiet; then
+            echo "No infrastructure change."
+          else
+            git commit -m "chore(infra): publish hermes bridge release"
+            git push origin main
+          fi
+
+  verify:
+    name: verify
+    needs: service
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every selected service to pass
+        env:
+          SERVICES_RESULT: ${{ needs.service.result }}
+        run: |
+          if [[ "${SERVICES_RESULT}" != "success" && "${SERVICES_RESULT}" != "skipped" ]]; then
+            echo "One or more selected services failed: ${SERVICES_RESULT}"
+            exit 1
+          fi
