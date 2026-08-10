@@ -1,6 +1,7 @@
 const Alexa = require('ask-sdk-core');
 
 const BRIDGE_URL = process.env.BRIDGE_URL;
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
 const BRIDGE_TIMEOUT_MS = 7000;
 
 const LaunchRequestHandler = {
@@ -102,6 +103,9 @@ async function sendToBridge(handlerInput, text) {
   if (!BRIDGE_URL) {
     throw new Error('BRIDGE_URL is not configured');
   }
+  if (!BRIDGE_API_KEY) {
+    throw new Error('BRIDGE_API_KEY is not configured');
+  }
 
   const envelope = handlerInput.requestEnvelope;
   const system = envelope.context?.System || {};
@@ -114,7 +118,10 @@ async function sendToBridge(handlerInput, text) {
   try {
     const response = await fetch(`${BRIDGE_URL.replace(/\/$/, '')}/v1/channels/alexa/turn`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${BRIDGE_API_KEY}`,
+        'content-type': 'application/json'
+      },
       body: JSON.stringify({
         text,
         deviceId,

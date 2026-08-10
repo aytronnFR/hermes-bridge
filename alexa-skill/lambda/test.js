@@ -2,6 +2,7 @@ const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.BRIDGE_URL = 'https://bridge.example.test';
+process.env.BRIDGE_API_KEY = 'lambda-test-key';
 const skill = require('./index.js');
 
 const originalFetch = global.fetch;
@@ -49,6 +50,7 @@ test('forwards Alexa text and returns the bridge response', async () => {
   const result = await invoke(envelope());
 
   assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/turn');
+  assert.equal(request.options.headers.authorization, 'Bearer lambda-test-key');
   assert.deepEqual(JSON.parse(request.options.body), {
     text: 'bonjour',
     deviceId: 'device-1',

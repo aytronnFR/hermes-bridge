@@ -1,5 +1,18 @@
 # Hermes Bridge
 
+The current bridge forwards Alexa turns to the Hermes Agent API of the `alexa` profile through `https://hermes-gateway-api.aytronn.com`.
+
+Backend configuration:
+
+```text
+HERMES_BRIDGE_API_KEY=<Lambda-to-Bridge API key>
+HERMES_GATEWAY_URL=https://hermes-gateway-api.aytronn.com
+HERMES_GATEWAY_API_KEY=<Bridge-to-Hermes API key>
+HERMES_GATEWAY_MODEL=alexa
+```
+
+The bridge sends `alexa:<deviceId>` as the Hermes named conversation and session key. Hermes retains one conversation per physical Alexa device, including across bridge restarts. Credentials and prompts are never logged.
+
 Hermes Bridge is an open-source channel adapter for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 Its purpose is to make Hermes reachable from voice assistants and custom devices through small, independently deployable channel adapters. The bridge is designed to keep public channel concerns — HTTP contracts, provider-specific payloads, device identity, authentication, and conversation routing — outside Hermes Core.
@@ -14,7 +27,8 @@ This repository currently contains a deliberately small end-to-end proof of tran
 Alexa Custom Skill
     -> versioned Node.js Lambda adapter
     -> Spring WebFlux bridge
-    -> fixed response: "Bien reçu chef"
+    -> authenticated Hermes Agent Responses API
+    -> Hermes profile `alexa`
 ```
 
 The bridge exposes:
@@ -24,7 +38,7 @@ POST /v1/channels/alexa/turn
 GET  /actuator/health
 ```
 
-For now, it does not call Hermes Core, persist conversations, authenticate users, link Amazon accounts, or implement the dashboard. Those are planned follow-up capabilities.
+For now, it does not authenticate users, link Amazon accounts, or implement the dashboard. Those are planned follow-up capabilities.
 
 ## Why this repository exists
 
@@ -79,7 +93,7 @@ Send a test turn from the repository root:
 Expected response:
 
 ```json
-{"text":"Bien reçu chef"}
+{"text":"<Hermes assistant response>"}
 ```
 
 Run backend tests:
@@ -87,6 +101,104 @@ Run backend tests:
 ```powershell
 cd bridge
 .\gradlew.bat clean test
+```
+
+## Connect the bridge to Hermes Agent
+
+Hermes Bridge talks to the official Hermes API, not to the Hermes dashboard.
+Keep the Hermes API bound to loopback and expose it through an authenticated
+HTTPS tunnel or reverse proxy. Do not expose port `8642` directly to the
+Internet.
+
+### 1. Generate two distinct keys
+
+Generate one value for Hermes Agent and another for Lambda-to-Bridge
+authentication. Store both in a password manager; never commit or paste them
+into source code.
+
+```powershell
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$hermesGatewayKey = "hmb_" + [Convert]::ToHexString($bytes).ToLowerInvariant()
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$bridgeApiKey = "hmb_" + [Convert]::ToHexString($bytes).ToLowerInvariant()
+```
+
+### 2. Configure the Hermes profile
+
+On the machine running the `alexa` Hermes profile, add the following to
+`/home/debian/.hermes/profiles/alexa/.env` (adapt the home directory and
+profile name for your installation):
+
+```dotenv
+API_SERVER_ENABLED=true
+API_SERVER_HOST=127.0.0.1
+API_SERVER_PORT=8642
+API_SERVER_KEY=<paste $hermesGatewayKey>
+```
+
+Restart that profile gateway, for example:
+
+```bash
+systemctl --user restart hermes-gateway-alexa.service
+```
+
+### 3. Publish only the local API through the tunnel
+
+Configure the public hostname used by the bridge to target this local origin:
+
+```text
+https://hermes-gateway-api.example.com -> http://127.0.0.1:8642
+```
+
+Port `9119` is the Hermes dashboard and must not be used as the bridge origin.
+
+### 4. Configure the bridge
+
+Inject the same key into the bridge runtime. In development, PowerShell can
+set the variables for the current process:
+
+```powershell
+$env:HERMES_BRIDGE_API_KEY = "<paste $bridgeApiKey>"
+$env:HERMES_GATEWAY_URL = "https://hermes-gateway-api.example.com"
+$env:HERMES_GATEWAY_API_KEY = "<paste $hermesGatewayKey>"
+$env:HERMES_GATEWAY_MODEL = "alexa"
+cd bridge
+.\gradlew.bat bootRun
+```
+
+In Docker, Kubernetes, or another deployment environment, inject both
+`HERMES_BRIDGE_API_KEY` and `HERMES_GATEWAY_API_KEY` through its secret
+mechanism rather than embedding them in an image or a tracked `.env` file.
+
+### 5. Configure the Alexa Lambda
+
+Add these environment variables to the Alexa-hosted Lambda (or the AWS Lambda
+function if you self-host it):
+
+```text
+BRIDGE_URL=https://bridge.example.com
+BRIDGE_API_KEY=<paste $bridgeApiKey>
+```
+
+The Lambda sends this value as `Authorization: Bearer ...` for every Alexa turn.
+The bridge accepts it only on `/v1/channels/alexa/**`; its health endpoint and
+Hermes API credentials remain separate.
+
+### 6. Verify the Hermes API without disclosing the key
+
+The unauthenticated request must return `401`; this proves the public hostname
+reaches the Hermes API and that bearer authentication is enforced:
+
+```powershell
+curl.exe -sS -o NUL -w "HTTP %{http_code}`n" https://hermes-gateway-api.example.com/v1/models
+```
+
+Then send an authenticated request from a trusted shell using the environment
+variable, never a literal token in shell history:
+
+```powershell
+curl.exe -sS -H "Authorization: Bearer $env:HERMES_GATEWAY_API_KEY" https://hermes-gateway-api.example.com/v1/models
 ```
 
 ## Docker
@@ -163,7 +275,7 @@ Alexa, envoie bonjour
 Expected spoken response:
 
 ```text
-Bien reçu chef
+The spoken response now comes from Hermes Gateway.
 ```
 
 See [docs/alexa-skill.md](docs/alexa-skill.md) for the detailed setup and [docs/architecture.md](docs/architecture.md) for the current integration boundary.
@@ -174,8 +286,6 @@ The Java service uses SLF4J with Logback and emits one JSON event per line to st
 
 ## Roadmap
 
-- Connect the bridge to a Hermes Gateway;
-- persist one Hermes conversation per physical voice device;
 - add authenticated gateway configuration;
 - add Alexa account linking and a device configuration dashboard;
 - add Google Home and custom-device adapters;

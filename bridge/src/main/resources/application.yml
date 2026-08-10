@@ -4,6 +4,15 @@ spring:
   main:
     banner-mode: off
 
+bridge:
+  api-key: ${HERMES_BRIDGE_API_KEY:}
+
+hermes:
+  gateway:
+    base-url: ${HERMES_GATEWAY_URL:https://hermes-gateway-api.aytronn.com}
+    api-key: ${HERMES_GATEWAY_API_KEY:}
+    model: ${HERMES_GATEWAY_MODEL:alexa}
+
 management:
   endpoints:
     web:
