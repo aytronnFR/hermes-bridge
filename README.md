@@ -89,6 +89,45 @@ cd bridge
 .\gradlew.bat clean test
 ```
 
+## Docker
+
+Build the backend image from the `bridge/` directory:
+
+```powershell
+docker build -t hermes-bridge:local .\bridge
+```
+
+Run the container:
+
+```powershell
+docker run --rm --publish 8080:8080 hermes-bridge:local
+```
+
+The image uses Java 25, runs as a non-root user, exposes port `8080`, and
+provides a container health check through `/actuator/health`. Test the running
+container from the repository root with:
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+
+On every push to `main`, GitHub Actions publishes the image to the GitHub
+Container Registry with the following tags:
+
+```text
+ghcr.io/aytronnfr/hermes-bridge:latest
+ghcr.io/aytronnfr/hermes-bridge:<commit-sha>
+```
+
+For infrastructure deployments, prefer the immutable commit-SHA tag:
+
+```powershell
+docker pull ghcr.io/aytronnfr/hermes-bridge:<commit-sha>
+```
+
+Pulling the image may require authenticating to `ghcr.io` if the package is
+private. Pull requests still build the image, but do not publish it.
+
 Run Alexa adapter tests:
 
 ```powershell
