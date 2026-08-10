@@ -111,9 +111,22 @@ container from the repository root with:
 .\scripts\smoke-test.ps1
 ```
 
-For a registry deployment, tag the image with the registry name and push it
-from your infrastructure pipeline. The repository CI only builds the image;
-it does not publish it.
+On every push to `main`, GitHub Actions publishes the image to the GitHub
+Container Registry with the following tags:
+
+```text
+ghcr.io/aytronnfr/hermes-bridge:latest
+ghcr.io/aytronnfr/hermes-bridge:<commit-sha>
+```
+
+For infrastructure deployments, prefer the immutable commit-SHA tag:
+
+```powershell
+docker pull ghcr.io/aytronnfr/hermes-bridge:<commit-sha>
+```
+
+Pulling the image may require authenticating to `ghcr.io` if the package is
+private. Pull requests still build the image, but do not publish it.
 
 Run Alexa adapter tests:
 

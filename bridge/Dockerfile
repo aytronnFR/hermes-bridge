@@ -11,6 +11,8 @@ RUN chmod +x gradlew \
 # -------- Stage 2: runtime --------
 FROM eclipse-temurin:25-jre-jammy
 
+LABEL org.opencontainers.image.source="https://github.com/aytronnFR/hermes-bridge"
+
 RUN apt-get update \
     && apt-get install --no-install-recommends -y libgomp1 libstdc++6 wget \
     && rm -rf /var/lib/apt/lists/* \
