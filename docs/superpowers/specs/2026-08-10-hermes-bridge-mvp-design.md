@@ -14,7 +14,7 @@ The MVP validates the end-to-end Alexa-to-bridge transport. It does not yet auth
 ```text
 hermes-bridge/
 ├── bridge/
-│   └── Spring Boot WebFlux service, Gradle Kotlin DSL build, configuration and tests
+│   └── Spring Boot WebFlux service, Gradle Kotlin DSL build, Logback configuration, and tests
 ├── alexa-skill/
 │   ├── skill-package/
 │   │   ├── skill.json
@@ -45,7 +45,9 @@ hermes-bridge/
 - One endpoint: `POST /v1/channels/alexa/turn`.
 - One operational endpoint: `GET /actuator/health`.
 - No database, Hermes call, OAuth, or external identity provider.
-- Logback remains the logging backend and emits structured ECS JSON to stdout for Loki/Grafana ingestion.
+- Application code uses the SLF4J API with Logback as the explicit logging implementation.
+- The JSON encoder is provided by `logstash-logback-encoder`, configured without application-managed log files.
+- A versioned `src/main/resources/logback-spring.xml` configuration emits one structured JSON event per stdout line for Loki/Grafana ingestion.
 - Logs include stable service metadata and safe correlation fields such as `channel`, `requestId`, and `deviceId` when present.
 - Request text, authorization material, and other sensitive payloads are not logged.
 
@@ -61,7 +63,7 @@ Malformed JSON or invalid fields return HTTP 400 using a documented error shape.
 
 The endpoint is intentionally suitable for development testing only. Production exposure must add authentication, rate limiting, request-size limits, and HTTPS enforcement.
 
-The logging configuration is documented and verified as one JSON object per line. Grafana/Loki is expected to collect container stdout rather than application-managed log files.
+The Logback configuration is documented and verified as one JSON object per line. Grafana/Loki is expected to collect container stdout rather than application-managed log files.
 
 ## Alexa Skill
 
