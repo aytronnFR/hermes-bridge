@@ -9,6 +9,7 @@ node_modules/
 coverage/
 .ask/
 .tools/
+/docs/superpowers/
 .env
 .env.*
 !.env.example
