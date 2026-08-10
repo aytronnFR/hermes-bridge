@@ -47,10 +47,10 @@ jobs:
 
           changed_services='[]'
           if [[ "${BRIDGE_CHANGED}" == "true" ]]; then
-            changed_services="$(jq -c '. + [\"bridge\"]' <<<"${changed_services}")"
+            changed_services="$(jq -c '. + ["bridge"]' <<<"${changed_services}")"
           fi
           if [[ "${ALEXA_CHANGED}" == "true" ]]; then
-            changed_services="$(jq -c '. + [\"alexa\"]' <<<"${changed_services}")"
+            changed_services="$(jq -c '. + ["alexa"]' <<<"${changed_services}")"
           fi
 
           echo "changed_services=${changed_services}" >> "${GITHUB_OUTPUT}"
