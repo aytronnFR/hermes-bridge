@@ -89,6 +89,32 @@ cd bridge
 .\gradlew.bat clean test
 ```
 
+## Docker
+
+Build the backend image from the `bridge/` directory:
+
+```powershell
+docker build -t hermes-bridge:local .\bridge
+```
+
+Run the container:
+
+```powershell
+docker run --rm --publish 8080:8080 hermes-bridge:local
+```
+
+The image uses Java 25, runs as a non-root user, exposes port `8080`, and
+provides a container health check through `/actuator/health`. Test the running
+container from the repository root with:
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+
+For a registry deployment, tag the image with the registry name and push it
+from your infrastructure pipeline. The repository CI only builds the image;
+it does not publish it.
+
 Run Alexa adapter tests:
 
 ```powershell

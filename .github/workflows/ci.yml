@@ -9,32 +9,44 @@ permissions:
 
 jobs:
   verify:
-    name: verify
+    name: verify (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bridge
+            component: bridge
+          - name: alexa-skill
+            component: alexa
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        if: matrix.component == 'bridge'
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
 
       - name: Verify Spring bridge
+        if: matrix.component == 'bridge'
         working-directory: bridge
         run: ./gradlew clean test
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        if: matrix.component == 'alexa'
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: alexa-skill/lambda/package-lock.json
 
       - name: Verify Alexa adapter
+        if: matrix.component == 'alexa'
         working-directory: alexa-skill/lambda
         run: |
           npm ci
@@ -42,5 +54,19 @@ jobs:
           npm run check
 
       - name: Validate Alexa JSON resources
+        if: matrix.component == 'alexa'
         working-directory: alexa-skill
         run: node --input-type=module -e "import { readFileSync } from 'node:fs'; for (const file of ['skill-package/skill.json', 'skill-package/interactionModels/custom/fr-FR.json', 'ask-resources.json']) JSON.parse(readFileSync(file, 'utf8')); console.log('Alexa JSON valid')"
+
+  docker:
+    name: docker (bridge)
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build bridge image
+        run: docker build --tag hermes-bridge:ci ./bridge
