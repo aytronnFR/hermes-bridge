@@ -3,6 +3,7 @@ package com.aytronn.hermesbridge.controller.alexa;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioCancelRequest;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioJobRequest;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioJobResponse;
+import com.aytronn.hermesbridge.config.BridgePublicUrlProperties;
 import com.aytronn.hermesbridge.service.audio.AudioJob;
 import com.aytronn.hermesbridge.service.audio.AudioJobService;
 import jakarta.validation.Valid;
@@ -27,9 +28,11 @@ import reactor.core.publisher.Mono;
 public class AlexaAudioController {
 
   private final AudioJobService jobs;
+  private final BridgePublicUrlProperties publicUrlProperties;
 
-  public AlexaAudioController(AudioJobService jobs) {
+  public AlexaAudioController(AudioJobService jobs, BridgePublicUrlProperties publicUrlProperties) {
     this.jobs = jobs;
+    this.publicUrlProperties = publicUrlProperties;
   }
 
   @PostMapping("/jobs")
@@ -37,11 +40,19 @@ public class AlexaAudioController {
       ServerWebExchange exchange) {
     AudioJob job = jobs.create(request.userId(), request.deviceId(), request.text());
     String capability = encode(job.id(), job.token());
-    URI base = exchange.getRequest().getURI();
+    URI base = publicBaseUrl(exchange);
     String streamUrl = base.getScheme() + "://" + base.getAuthority()
         + "/v1/channels/alexa/audio/streams/" + job.id() + "?token=" + job.token();
     log.info("audio_job_response_created jobId={} scheme={} authority={}", job.id(), base.getScheme(), base.getAuthority());
     return Mono.just(new AlexaAudioJobResponse(job.id(), streamUrl, capability));
+  }
+
+  private URI publicBaseUrl(ServerWebExchange exchange) {
+    String configured = publicUrlProperties.publicUrl();
+    if (configured != null && !configured.isBlank()) {
+      return URI.create(configured.replaceAll("/+$", ""));
+    }
+    return exchange.getRequest().getURI();
   }
 
   @PostMapping("/cancel")

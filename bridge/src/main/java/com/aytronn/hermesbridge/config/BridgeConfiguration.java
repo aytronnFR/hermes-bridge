@@ -13,7 +13,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({BridgeApiKeyProperties.class, HermesGatewayProperties.class, TtsProperties.class})
+@EnableConfigurationProperties({BridgeApiKeyProperties.class, BridgePublicUrlProperties.class,
+    HermesGatewayProperties.class, TtsProperties.class})
 public class BridgeConfiguration {
 
   @Bean

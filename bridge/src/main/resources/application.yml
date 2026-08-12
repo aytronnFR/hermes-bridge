@@ -6,6 +6,7 @@ spring:
 
 bridge:
   api-key: ${HERMES_BRIDGE_API_KEY:}
+  public-url: ${BRIDGE_PUBLIC_URL:}
 
 hermes:
   gateway:
