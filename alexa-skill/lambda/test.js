@@ -62,3 +62,14 @@ test('forwards stop to Bridge using the opaque playback token', async () => {
   assert.deepEqual(JSON.parse(request.options.body), { playbackToken: 'capability', userId: 'user-1' });
   assert.equal(result.response.directives[0].type, 'AudioPlayer.Stop');
 });
+
+test('acknowledges AudioPlayer playback lifecycle events with an empty response', async () => {
+  const result = await skill.handler(envelope({
+    type: 'AudioPlayer.PlaybackStarted',
+    requestId: 'playback-started-1',
+    token: 'capability',
+    offsetInMilliseconds: 0
+  }), {});
+
+  assert.deepEqual(result.response, {});
+});

@@ -82,6 +82,16 @@ const AudioPlaybackStoppedHandler = {
   }
 };
 
+const AudioPlaybackLifecycleHandler = {
+  canHandle(handlerInput) {
+    return ['AudioPlayer.PlaybackStarted', 'AudioPlayer.PlaybackFinished'].includes(
+      Alexa.getRequestType(handlerInput.requestEnvelope));
+  },
+  handle(handlerInput) {
+    return handlerInput.responseBuilder.getResponse();
+  }
+};
+
 const FallbackIntentHandler = {
   canHandle(handlerInput) {
     return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
@@ -196,6 +206,7 @@ const skill = Alexa.SkillBuilders.custom()
     ExitIntentHandler,
     FallbackIntentHandler,
     AudioPlaybackStoppedHandler,
+    AudioPlaybackLifecycleHandler,
     SessionEndedRequestHandler
   )
   .addErrorHandlers(ErrorHandler)
