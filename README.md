@@ -9,6 +9,10 @@ HERMES_BRIDGE_API_KEY=<Lambda-to-Bridge API key>
 HERMES_GATEWAY_URL=https://hermes-gateway-api.aytronn.com
 HERMES_GATEWAY_API_KEY=<Bridge-to-Hermes API key>
 HERMES_GATEWAY_MODEL=alexa
+TTS_BASE_URL=http://hermes-kokoro:8880
+TTS_MODEL=kokoro
+TTS_VOICE=ff_siwis
+DISCORD_WEBHOOK_URL=<optional background-result webhook>
 ```
 
 The bridge sends `alexa:<deviceId>` as the Hermes named conversation and session key. Hermes retains one conversation per physical Alexa device, including across bridge restarts. Credentials and prompts are never logged.
@@ -27,8 +31,10 @@ This repository currently contains a deliberately small end-to-end proof of tran
 Alexa Custom Skill
     -> versioned Node.js Lambda adapter
     -> Spring WebFlux bridge
-    -> authenticated Hermes Agent Responses API
+    -> authenticated Hermes Agent Responses API (SSE)
     -> Hermes profile `alexa`
+    -> internal Kokoro TTS service
+    -> secure HTTPS AudioPlayer stream back to Alexa
 ```
 
 The bridge exposes:
@@ -38,6 +44,7 @@ POST /v1/channels/alexa/turn
 POST /v1/channels/alexa/audio/jobs
 POST /v1/channels/alexa/audio/cancel
 GET  /actuator/health
+GET  /actuator/prometheus
 ```
 
 For now, it does not authenticate users, link Amazon accounts, or implement the dashboard. Those are planned follow-up capabilities.
@@ -51,6 +58,35 @@ Hermes Agent already provides the agent runtime and its own communication surfac
 - return a provider-ready text response;
 - keep channel adapters versioned and independently deployable;
 - prepare persistent device-to-conversation mapping without coupling it to Hermes Core.
+
+## Alexa audio behavior
+
+Alexa acknowledges a long-running request immediately, then reads a secure MP3
+stream produced by the Bridge. Hermes SSE fragments are buffered into complete
+sentences before being submitted to Kokoro, so the voice does not pause between
+partial words or clauses.
+
+While the first spoken sentence is being generated, the stream plays a short,
+original low-volume waiting loop. It stops as soon as Kokoro produces speech.
+The public stream URL is an expiring opaque capability created for one
+originating Alexa user/device job; it contains no prompt text or identity.
+
+Hermes can include control markers in its response stream:
+
+```text
+[[progress:Je consulte les données]]
+[[background]]
+```
+
+`progress` is spoken in the foreground and removed from the final answer.
+`background` switches the remaining work to background mode. A user can request
+the same behavior explicitly by saying `en arrière-plan`; in that case the
+Lambda does not start an AudioPlayer stream and the final answer is sent to
+Discord through `DISCORD_WEBHOOK_URL`.
+
+See [docs/alexa-live-audio.md](docs/alexa-live-audio.md) and
+[docs/alexa-background-results.md](docs/alexa-background-results.md) for the
+complete runtime and security contracts.
 
 ## Repository layout
 
@@ -165,6 +201,8 @@ $env:HERMES_BRIDGE_API_KEY = "<paste $bridgeApiKey>"
 $env:HERMES_GATEWAY_URL = "https://hermes-gateway-api.example.com"
 $env:HERMES_GATEWAY_API_KEY = "<paste $hermesGatewayKey>"
 $env:HERMES_GATEWAY_MODEL = "alexa"
+$env:TTS_BASE_URL = "http://hermes-kokoro:8880"
+$env:DISCORD_WEBHOOK_URL = "<optional Discord incoming webhook>"
 cd bridge
 .\gradlew.bat bootRun
 ```
@@ -172,6 +210,8 @@ cd bridge
 In Docker, Kubernetes, or another deployment environment, inject both
 `HERMES_BRIDGE_API_KEY` and `HERMES_GATEWAY_API_KEY` through its secret
 mechanism rather than embedding them in an image or a tracked `.env` file.
+`TTS_BASE_URL` and, when background results are enabled,
+`DISCORD_WEBHOOK_URL` must follow the same secret/configuration mechanism.
 
 ### 5. Configure the Alexa Lambda
 
