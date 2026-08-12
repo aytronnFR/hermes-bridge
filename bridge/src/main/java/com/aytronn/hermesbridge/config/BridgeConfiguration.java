@@ -1,15 +1,19 @@
 package com.aytronn.hermesbridge.config;
 
 import com.aytronn.hermesbridge.service.alexa.AlexaConversationService;
+import com.aytronn.hermesbridge.service.audio.AudioJobService;
 import com.aytronn.hermesbridge.service.hermes.HermesGatewayClient;
+import com.aytronn.hermesbridge.service.tts.TtsClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Clock;
+import java.time.Duration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({BridgeApiKeyProperties.class, HermesGatewayProperties.class})
+@EnableConfigurationProperties({BridgeApiKeyProperties.class, HermesGatewayProperties.class, TtsProperties.class})
 public class BridgeConfiguration {
 
   @Bean
@@ -20,6 +24,11 @@ public class BridgeConfiguration {
   @Bean
   WebClient.Builder webClientBuilder() {
     return WebClient.builder();
+  }
+
+  @Bean
+  AudioJobService audioJobService(HermesGatewayClient gatewayClient, TtsClient ttsClient) {
+    return new AudioJobService(Clock.systemUTC(), Duration.ofMinutes(10), gatewayClient, ttsClient);
   }
 
   @Bean

@@ -5,7 +5,12 @@
       "custom": {
         "endpoint": {
           "uri": ""
-        }
+        },
+        "interfaces": [
+          {
+            "type": "AUDIO_PLAYER"
+          }
+        ]
       }
     },
     "publishingInformation": {

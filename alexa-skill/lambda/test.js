@@ -4,68 +4,61 @@ const assert = require('node:assert/strict');
 process.env.BRIDGE_URL = 'https://bridge.example.test';
 process.env.BRIDGE_API_KEY = 'lambda-test-key';
 const skill = require('./index.js');
-
 const originalFetch = global.fetch;
 
-afterEach(() => {
-  global.fetch = originalFetch;
-});
+afterEach(() => { global.fetch = originalFetch; });
 
-function envelope() {
+function envelope(request = {}) {
   return {
     version: '1.0',
     session: { sessionId: 'session-1' },
-    context: {
-      System: {
-        device: { deviceId: 'device-1' }
-      }
-    },
+    context: { System: { device: { deviceId: 'device-1' }, user: { userId: 'user-1' } } },
     request: {
-      type: 'IntentRequest',
-      requestId: 'request-1',
-      intent: {
-        name: 'SendTextIntent',
-        slots: { message: { name: 'message', value: 'bonjour' } }
-      }
+      type: 'IntentRequest', requestId: 'request-1',
+      intent: { name: 'SendTextIntent', slots: { message: { name: 'message', value: 'bonjour' } } },
+      ...request
     }
   };
 }
 
-function invoke(event) {
-  return skill.handler(event, {});
-}
-
-test('forwards Alexa text and returns the bridge response', async () => {
+test('starts a secure audio job and immediately returns an AudioPlayer directive', async () => {
   let request;
   global.fetch = async (url, options) => {
     request = { url, options };
-    return {
-      ok: true,
-      async json() {
-        return { text: 'Bien reçu chef' };
-      }
-    };
+    return { ok: true, async json() { return {
+      jobId: 'job-1',
+      streamUrl: 'https://bridge.example.test/v1/channels/alexa/audio/streams/job-1?token=opaque',
+      playbackToken: 'capability'
+    }; } };
   };
 
-  const result = await invoke(envelope());
+  const result = await skill.handler(envelope(), {});
 
-  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/turn');
+  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/audio/jobs');
   assert.equal(request.options.headers.authorization, 'Bearer lambda-test-key');
   assert.deepEqual(JSON.parse(request.options.body), {
-    text: 'bonjour',
-    deviceId: 'device-1',
-    sessionId: 'session-1',
-    requestId: 'request-1'
+    text: 'bonjour', userId: 'user-1', deviceId: 'device-1'
   });
-  assert.equal(result.response.outputSpeech.ssml, '<speak>Bien reçu chef</speak>');
+  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok patron, je lance le job.</speak>');
+  assert.equal(result.response.directives[0].type, 'AudioPlayer.Play');
+  assert.equal(result.response.directives[0].audioItem.stream.url,
+    'https://bridge.example.test/v1/channels/alexa/audio/streams/job-1?token=opaque');
+  assert.equal(result.response.shouldEndSession, true);
 });
 
-test('returns a spoken failure when the bridge is unavailable', async () => {
-  global.fetch = async () => {
-    throw new Error('network unavailable');
+test('forwards stop to Bridge using the opaque playback token', async () => {
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options };
+    return { ok: true, async json() { return {}; } };
   };
+  const result = await skill.handler(envelope({
+    requestId: 'stop-1',
+    token: 'capability',
+    intent: { name: 'AMAZON.StopIntent', slots: {} },
+  }), {});
 
-  const result = await invoke(envelope());
-
-  assert.equal(result.response.outputSpeech.ssml, '<speak>Je n’ai pas réussi à joindre Hermes.</speak>');
+  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/audio/cancel');
+  assert.deepEqual(JSON.parse(request.options.body), { playbackToken: 'capability', userId: 'user-1' });
+  assert.equal(result.response.directives[0].type, 'AudioPlayer.Stop');
 });

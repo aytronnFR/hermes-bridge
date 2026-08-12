@@ -35,6 +35,9 @@ jobs:
             alexa:
               - 'alexa-skill/**'
               - '.github/workflows/ci.yml'
+            tts:
+              - 'tts/**'
+              - '.github/workflows/ci.yml'
 
       - name: Build service matrix
         id: set-matrix
@@ -42,6 +45,7 @@ jobs:
         env:
           BRIDGE_CHANGED: ${{ steps.filter.outputs.bridge }}
           ALEXA_CHANGED: ${{ steps.filter.outputs.alexa }}
+          TTS_CHANGED: ${{ steps.filter.outputs.tts }}
         run: |
           set -euo pipefail
 
@@ -51,6 +55,9 @@ jobs:
           fi
           if [[ "${ALEXA_CHANGED}" == "true" ]]; then
             changed_services="$(jq -c '. + ["alexa"]' <<<"${changed_services}")"
+          fi
+          if [[ "${TTS_CHANGED}" == "true" ]]; then
+            changed_services="$(jq -c '. + ["tts"]' <<<"${changed_services}")"
           fi
 
           echo "changed_services=${changed_services}" >> "${GITHUB_OUTPUT}"
@@ -73,6 +80,10 @@ jobs:
             component: alexa
             kind: node
             image: ''
+          - name: hermes-kokoro
+            component: tts
+            kind: docker
+            image: hermes-kokoro
 
     permissions:
       contents: read
@@ -116,7 +127,7 @@ jobs:
         run: node --input-type=module -e "import { readFileSync } from 'node:fs'; for (const file of ['skill-package/skill.json', 'skill-package/interactionModels/custom/fr-FR.json', 'ask-resources.json']) JSON.parse(readFileSync(file, 'utf8')); console.log('Alexa JSON valid')"
 
       - name: Log in to GitHub Container Registry
-        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component) && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: matrix.kind != 'node' && contains(needs.changes.outputs.changed_services, matrix.component) && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -124,7 +135,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
-        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        if: matrix.kind != 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -134,10 +145,10 @@ jobs:
             type=sha,prefix=main-,format=short
 
       - name: Build and publish candidate image
-        if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
+        if: matrix.kind != 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
         uses: docker/build-push-action@v6
         with:
-          context: ./bridge
+          context: ./${{ matrix.component }}
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -145,7 +156,7 @@ jobs:
   release:
     name: publish release
     needs: [changes, service]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.service.result == 'success' && needs.changes.outputs.changed_services != '[]'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.service.result == 'success' && contains(needs.changes.outputs.changed_services, 'bridge')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

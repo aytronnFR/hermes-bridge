@@ -8,9 +8,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 @Slf4j
 @Component
@@ -56,6 +59,34 @@ public class ReactorNettyHermesGatewayClient implements HermesGatewayClient {
         .timeout(Duration.ofSeconds(30))
         .onErrorMap(error -> error instanceof HermesGatewayException
             ? error : new HermesGatewayException("Hermes Gateway API request failed", error));
+  }
+
+  @Override
+  public Flux<String> streamTurn(String conversationId, String sessionKey, String text) {
+    ObjectNode body = objectMapper.createObjectNode()
+        .put("model", required(properties.model(), "HERMES_GATEWAY_MODEL"))
+        .put("input", text)
+        .put("conversation", conversationId)
+        .put("store", true)
+        .put("stream", true);
+    return webClient.post().uri("/v1/responses")
+        .contentType(MediaType.APPLICATION_JSON)
+        .accept(MediaType.TEXT_EVENT_STREAM)
+        .headers(headers -> {
+          headers.setBearerAuth(required(properties.apiKey(), "HERMES_GATEWAY_API_KEY"));
+          headers.set(SESSION_KEY_HEADER, sessionKey);
+        })
+        .bodyValue(writeJson(body))
+        .retrieve()
+        .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() { })
+        .filter(event -> "response.output_text.delta".equals(event.event()))
+        .mapNotNull(ServerSentEvent::data)
+        .map(this::readTree)
+        .map(json -> json.path("delta").asText())
+        .filter(delta -> !delta.isBlank())
+        .timeout(Duration.ofMinutes(5))
+        .onErrorMap(error -> error instanceof HermesGatewayException ? error
+            : new HermesGatewayException("Hermes Gateway streaming request failed", error));
   }
 
   private String extractOutputText(JsonNode response) {

@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 public class AlexaApiKeyWebFilter implements WebFilter {
 
   private static final String ALEXA_PATH_PREFIX = "/v1/channels/alexa/";
+  private static final String AUDIO_STREAM_PATH_PREFIX = "/v1/channels/alexa/audio/streams/";
   private static final String BEARER_PREFIX = "Bearer ";
 
   private final String apiKey;
@@ -31,7 +32,8 @@ public class AlexaApiKeyWebFilter implements WebFilter {
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-    if (!exchange.getRequest().getPath().value().startsWith(ALEXA_PATH_PREFIX)) {
+    String path = exchange.getRequest().getPath().value();
+    if (!path.startsWith(ALEXA_PATH_PREFIX) || path.startsWith(AUDIO_STREAM_PATH_PREFIX)) {
       return chain.filter(exchange);
     }
     if (!hasValidBearerToken(exchange.getRequest().getHeaders())) {

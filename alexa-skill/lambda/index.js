@@ -2,7 +2,8 @@ const Alexa = require('ask-sdk-core');
 
 const BRIDGE_URL = process.env.BRIDGE_URL;
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
-const BRIDGE_TIMEOUT_MS = 55_000;
+const BRIDGE_TIMEOUT_MS = 7_000;
+const activePlaybackTokens = new Map();
 
 const LaunchRequestHandler = {
   canHandle(handlerInput) {
@@ -10,7 +11,7 @@ const LaunchRequestHandler = {
   },
   handle(handlerInput) {
     return handlerInput.responseBuilder
-      .speak('Bonjour, que voulez-vous transmettre à Hermes ?')
+      .speak('Oui ?')
       .reprompt('Dites-moi votre message.')
       .getResponse();
   }
@@ -25,9 +26,15 @@ const SendTextIntentHandler = {
     const text = Alexa.getSlotValue(handlerInput.requestEnvelope, 'message');
 
     try {
-      const bridgeResponse = await sendToBridge(handlerInput, text);
+      const bridgeResponse = await createAudioJob(handlerInput, text);
+      activePlaybackTokens.set(alexaUserId(handlerInput), bridgeResponse.playbackToken);
       return handlerInput.responseBuilder
-        .speak(bridgeResponse.text)
+        .speak('Ok patron, je lance le job.')
+        .addAudioPlayerPlayDirective(
+          'REPLACE_ALL', bridgeResponse.streamUrl, bridgeResponse.playbackToken, 0, null,
+          { title: 'Hermes', subtitle: 'Réponse en cours' }
+        )
+        .withShouldEndSession(true)
         .getResponse();
     } catch (error) {
       console.error(JSON.stringify({ event: 'bridge_request_failed', error: error.message }));
@@ -54,14 +61,24 @@ const HelpIntentHandler = {
 const ExitIntentHandler = {
   canHandle(handlerInput) {
     return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
-      && ['AMAZON.CancelIntent', 'AMAZON.StopIntent'].includes(
+      && ['AMAZON.CancelIntent', 'AMAZON.StopIntent', 'AMAZON.PauseIntent'].includes(
         Alexa.getIntentName(handlerInput.requestEnvelope)
       );
   },
-  handle(handlerInput) {
-    return handlerInput.responseBuilder
-      .speak('Au revoir.')
-      .getResponse();
+  async handle(handlerInput) {
+    await cancelAudioJob(handlerInput);
+    return handlerInput.responseBuilder.addAudioPlayerStopDirective().getResponse();
+  }
+};
+
+const AudioPlaybackStoppedHandler = {
+  canHandle(handlerInput) {
+    return ['AudioPlayer.PlaybackStopped', 'AudioPlayer.PlaybackFailed'].includes(
+      Alexa.getRequestType(handlerInput.requestEnvelope));
+  },
+  async handle(handlerInput) {
+    await cancelAudioJob(handlerInput);
+    return handlerInput.responseBuilder.getResponse();
   }
 };
 
@@ -99,7 +116,7 @@ const ErrorHandler = {
   }
 };
 
-async function sendToBridge(handlerInput, text) {
+async function createAudioJob(handlerInput, text) {
   if (!BRIDGE_URL) {
     throw new Error('BRIDGE_URL is not configured');
   }
@@ -111,12 +128,16 @@ async function sendToBridge(handlerInput, text) {
   const system = envelope.context?.System || {};
   const request = envelope.request || {};
   const deviceId = system.device?.deviceId;
+  const userId = system.user?.userId;
+  if (!deviceId || !userId) {
+    throw new Error('Alexa user and device identifiers are required');
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${BRIDGE_URL.replace(/\/$/, '')}/v1/channels/alexa/turn`, {
+    const response = await fetch(`${BRIDGE_URL.replace(/\/$/, '')}/v1/channels/alexa/audio/jobs`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${BRIDGE_API_KEY}`,
@@ -124,9 +145,8 @@ async function sendToBridge(handlerInput, text) {
       },
       body: JSON.stringify({
         text,
-        deviceId,
-        sessionId: envelope.session?.sessionId,
-        requestId: request.requestId
+        userId,
+        deviceId
       }),
       signal: controller.signal
     });
@@ -136,13 +156,36 @@ async function sendToBridge(handlerInput, text) {
     }
 
     const body = await response.json();
-    if (!body || typeof body.text !== 'string' || body.text.length === 0) {
+    if (!body || typeof body.streamUrl !== 'string' || typeof body.playbackToken !== 'string') {
       throw new Error('Bridge returned an invalid response');
     }
     return body;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function cancelAudioJob(handlerInput) {
+  if (!BRIDGE_URL || !BRIDGE_API_KEY) return;
+  const envelope = handlerInput.requestEnvelope;
+  const userId = alexaUserId(handlerInput);
+  const token = envelope.request?.token || activePlaybackTokens.get(userId);
+  if (!userId || !token) return;
+  try {
+    await fetch(`${BRIDGE_URL.replace(/\/$/, '')}/v1/channels/alexa/audio/cancel`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${BRIDGE_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ playbackToken: token, userId })
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'audio_cancel_failed', error: error.message }));
+  } finally {
+    activePlaybackTokens.delete(userId);
+  }
+}
+
+function alexaUserId(handlerInput) {
+  return handlerInput.requestEnvelope.context?.System?.user?.userId;
 }
 
 const skill = Alexa.SkillBuilders.custom()
@@ -152,6 +195,7 @@ const skill = Alexa.SkillBuilders.custom()
     HelpIntentHandler,
     ExitIntentHandler,
     FallbackIntentHandler,
+    AudioPlaybackStoppedHandler,
     SessionEndedRequestHandler
   )
   .addErrorHandlers(ErrorHandler)
@@ -160,5 +204,5 @@ const skill = Alexa.SkillBuilders.custom()
 // Node.js 24 no longer supports callback-based Lambda handlers.
 exports.handler = async (event, context) => skill.invoke(event, context);
 
-exports.sendToBridge = sendToBridge;
+exports.createAudioJob = createAudioJob;
 

@@ -35,6 +35,8 @@ The bridge exposes:
 
 ```http
 POST /v1/channels/alexa/turn
+POST /v1/channels/alexa/audio/jobs
+POST /v1/channels/alexa/audio/cancel
 GET  /actuator/health
 ```
 
@@ -257,10 +259,10 @@ npm run check
 
 ## Alexa development
 
-The Alexa Skill is stored under `alexa-skill/` using the ASK CLI project layout. Its French invocation name is `hermes`, and the Lambda forwards the recognized text to:
+The Alexa Skill is stored under `alexa-skill/` using the ASK CLI project layout. Its French invocation name is `hermes`. For short replies it can use the text turn endpoint; for long-running Hermes work it immediately starts a secure Alexa AudioPlayer stream through:
 
 ```http
-POST ${BRIDGE_URL}/v1/channels/alexa/turn
+POST ${BRIDGE_URL}/v1/channels/alexa/audio/jobs
 ```
 
 Set `BRIDGE_URL` in the Lambda environment to the public HTTPS base URL of the bridge. The current Alexa-hosted workflow is synchronized through the Alexa Developer Console's Git workflow. The package also retains ASK CLI metadata for future AWS-hosted deployment.
@@ -272,10 +274,12 @@ Alexa, ouvre Hermes
 Alexa, envoie bonjour
 ```
 
-Expected spoken response:
+The complete deployment sequence, audio-stream security contract, cancellation behaviour, and physical-Echo test plan are in [docs/alexa-live-audio.md](docs/alexa-live-audio.md).
+
+Expected initial spoken response:
 
 ```text
-The spoken response now comes from Hermes Gateway.
+Ok patron, je lance le job.
 ```
 
 See [docs/alexa-skill.md](docs/alexa-skill.md) for the detailed setup and [docs/architecture.md](docs/architecture.md) for the current integration boundary.

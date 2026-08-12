@@ -1,5 +1,6 @@
 package com.aytronn.hermesbridge.exception;
 
+import com.aytronn.hermesbridge.service.audio.AudioJobNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,5 +33,11 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ApiError> handleHermesFailure(HermesGatewayException exception) {
     return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
         .body(new ApiError("HERMES_GATEWAY_ERROR", "Hermes Gateway is unavailable", "/v1/channels/alexa/turn"));
+  }
+
+  @ExceptionHandler(AudioJobNotFoundException.class)
+  public ResponseEntity<ApiError> handleUnknownAudioJob(AudioJobNotFoundException exception) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(new ApiError("AUDIO_JOB_NOT_FOUND", "Audio job is unavailable", "/v1/channels/alexa/audio"));
   }
 }

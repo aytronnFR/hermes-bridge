@@ -13,6 +13,11 @@ hermes:
     api-key: ${HERMES_GATEWAY_API_KEY:}
     model: ${HERMES_GATEWAY_MODEL:alexa}
 
+tts:
+  base-url: ${TTS_BASE_URL:http://hermes-kokoro:8880}
+  model: ${TTS_MODEL:kokoro}
+  voice: ${TTS_VOICE:ff_siwis}
+
 management:
   endpoints:
     web:
