@@ -10,8 +10,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import com.aytronn.hermesbridge.service.hermes.HermesGatewayClient;
 import com.aytronn.hermesbridge.service.tts.TtsClient;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
+@Slf4j
 public class AudioJobService {
 
   private static final SecureRandom RANDOM = new SecureRandom();
@@ -47,6 +49,7 @@ public class AudioJobService {
         clock.instant().plus(lifetime)
     );
     jobs.put(id, job);
+    log.info("audio_job_created jobId={}", job.id());
     return job;
   }
 
@@ -75,7 +78,10 @@ public class AudioJobService {
       return false;
     }
     boolean removed = jobs.remove(id, job);
-    if (removed) job.cancel();
+    if (removed) {
+      log.info("audio_job_cancelled jobId={}", job.id());
+      job.cancel();
+    }
     return removed;
   }
 
@@ -83,12 +89,23 @@ public class AudioJobService {
     AudioJob job = resolve(id, token);
     if (gatewayClient == null || ttsClient == null) throw new IllegalStateException("Audio streaming is not configured");
     if (job.markStarted()) {
+      log.info("audio_stream_opened jobId={}", job.id());
       job.upstream(gatewayClient.streamTurn("alexa:" + job.ownerDeviceId(), "alexa:" + job.ownerDeviceId(), job.text())
           .transform(SentenceChunker::sentences)
           .concatMap(ttsClient::synthesize)
-          .doOnNext(bytes -> job.audio().tryEmitNext(bytes))
-          .doOnError(ignored -> job.audio().tryEmitComplete())
-          .doFinally(ignored -> { job.audio().tryEmitComplete(); job.completed().tryEmitEmpty(); })
+          .doOnNext(bytes -> {
+            log.info("audio_tts_chunk_emitted jobId={} bytes={}", job.id(), bytes.length);
+            job.audio().tryEmitNext(bytes);
+          })
+          .doOnError(error -> {
+            log.warn("audio_stream_failed jobId={} errorType={}", job.id(), error.getClass().getSimpleName());
+            job.audio().tryEmitComplete();
+          })
+          .doFinally(signal -> {
+            log.info("audio_stream_completed jobId={} signal={}", job.id(), signal);
+            job.audio().tryEmitComplete();
+            job.completed().tryEmitEmpty();
+          })
           .subscribe());
     }
     Flux<byte[]> silence = Flux.interval(Duration.ZERO, Duration.ofMillis(500))

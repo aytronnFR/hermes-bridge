@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/v1/channels/alexa/audio")
+@Slf4j
 public class AlexaAudioController {
 
   private final AudioJobService jobs;
@@ -38,6 +40,7 @@ public class AlexaAudioController {
     URI base = exchange.getRequest().getURI();
     String streamUrl = base.getScheme() + "://" + base.getAuthority()
         + "/v1/channels/alexa/audio/streams/" + job.id() + "?token=" + job.token();
+    log.info("audio_job_response_created jobId={} scheme={} authority={}", job.id(), base.getScheme(), base.getAuthority());
     return Mono.just(new AlexaAudioJobResponse(job.id(), streamUrl, capability));
   }
 
