@@ -12,7 +12,7 @@ public final class AudioJob {
   private final String ownerDeviceId;
   private final String text;
   private final Instant expiresAt;
-  private final Sinks.Many<byte[]> audio = Sinks.many().unicast().onBackpressureBuffer();
+  private final Sinks.Many<byte[]> audio = Sinks.many().replay().all();
   private final Sinks.One<Void> completed = Sinks.one();
   private final AtomicBoolean started = new AtomicBoolean();
   private volatile Disposable upstream;
