@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CopyOnWriteArrayList;
 import com.aytronn.hermesbridge.service.hermes.HermesGatewayClient;
 import com.aytronn.hermesbridge.service.tts.TtsClient;
 import org.junit.jupiter.api.Test;
@@ -84,6 +85,28 @@ class AudioJobServiceTest {
         streamingService.openStream(job.id(), job.token()).collectList().block();
 
         assertThat(delivered.get()).isEqualTo("Rapport termine.");
+    }
+
+    @Test
+    void synthesizesGatewayFragmentsAsOneCompleteSentence() {
+        CopyOnWriteArrayList<String> synthesized = new CopyOnWriteArrayList<>();
+        HermesGatewayClient gateway = new HermesGatewayClient() {
+            @Override public Mono<String> submitTurn(String conversationId, String sessionKey, String text) { return Mono.empty(); }
+            @Override public Flux<String> streamTurn(String conversationId, String sessionKey, String text) {
+                return Flux.just("Bonjour, ", "comment allez", "-vous ?");
+            }
+        };
+        TtsClient tts = text -> {
+            synthesized.add(text);
+            return Mono.just(new byte[] {1, 2, 3});
+        };
+        AudioJobService streamingService = new AudioJobService(
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC), Duration.ofMinutes(10), gateway, tts);
+        AudioJob job = streamingService.create("alexa-user", "alexa-device", "Bonjour");
+
+        streamingService.openStream(job.id(), job.token()).collectList().block();
+
+        assertThat(synthesized).containsExactly("Bonjour, comment allez-vous ?");
     }
 
     @Test

@@ -105,6 +105,7 @@ public class AudioJobService {
       job.upstream(new HermesStreamDirectiveParser().parse(
               gatewayClient.streamTurn("alexa:" + job.ownerDeviceId(), "alexa:" + job.ownerDeviceId(), job.text()))
           .concatMap(event -> handleEvent(job, event))
+          .concatWith(Flux.defer(() -> flushFinalSentence(job)))
           .concatWith(Mono.defer(() -> publishBackgroundResult(job)))
           .doOnNext(bytes -> {
             job.speechStarted().tryEmitEmpty();
@@ -139,7 +140,14 @@ public class AudioJobService {
     }
     HermesStreamEvent.Text text = (HermesStreamEvent.Text) event;
     job.appendFinalResult(text.value());
-    return job.backgroundRequested() ? Flux.empty() : ttsClient.synthesize(text.value()).flux();
+    if (job.backgroundRequested()) return Flux.empty();
+    return Flux.fromIterable(job.appendSpeechFragment(text.value())).concatMap(ttsClient::synthesize);
+  }
+
+  private Flux<byte[]> flushFinalSentence(AudioJob job) {
+    if (job.backgroundRequested()) return Flux.empty();
+    String tail = job.flushPendingSpeech();
+    return tail.isBlank() ? Flux.empty() : ttsClient.synthesize(tail).flux();
   }
 
   private Mono<byte[]> publishBackgroundResult(AudioJob job) {

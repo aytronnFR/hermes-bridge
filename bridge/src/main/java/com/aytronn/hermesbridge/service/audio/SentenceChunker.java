@@ -9,18 +9,22 @@ final class SentenceChunker {
     StringBuilder pending = new StringBuilder();
     return deltas.concatMapIterable(delta -> {
       pending.append(delta);
-      java.util.List<String> completed = new java.util.ArrayList<>();
-      int boundary;
-      while ((boundary = boundary(pending)) >= 0) {
-        String sentence = pending.substring(0, boundary + 1).trim();
-        pending.delete(0, boundary + 1);
-        if (!sentence.isBlank()) completed.add(sentence);
-      }
-      return completed;
+      return drainCompleteSentences(pending);
     }).concatWith(Flux.defer(() -> {
       String tail = pending.toString().trim();
       return tail.isBlank() ? Flux.empty() : Flux.just(tail);
     }));
+  }
+
+  static java.util.List<String> drainCompleteSentences(StringBuilder pending) {
+    java.util.List<String> completed = new java.util.ArrayList<>();
+    int boundary;
+    while ((boundary = boundary(pending)) >= 0) {
+      String sentence = pending.substring(0, boundary + 1).trim();
+      pending.delete(0, boundary + 1);
+      if (!sentence.isBlank()) completed.add(sentence);
+    }
+    return completed;
   }
 
   private static int boundary(StringBuilder text) {

@@ -16,6 +16,7 @@ public final class AudioJob {
   private final Sinks.One<Void> completed = Sinks.one();
   private final Sinks.One<Void> speechStarted = Sinks.one();
   private final StringBuilder finalResult = new StringBuilder();
+  private final StringBuilder pendingSpeech = new StringBuilder();
   private final AtomicBoolean started = new AtomicBoolean();
   private final AtomicBoolean backgroundRequested;
   private volatile Disposable upstream;
@@ -41,6 +42,15 @@ public final class AudioJob {
   public Sinks.One<Void> speechStarted() { return speechStarted; }
   public synchronized void appendFinalResult(String text) { finalResult.append(text); }
   public synchronized String finalResult() { return finalResult.toString().trim(); }
+  public synchronized java.util.List<String> appendSpeechFragment(String text) {
+    pendingSpeech.append(text);
+    return SentenceChunker.drainCompleteSentences(pendingSpeech);
+  }
+  public synchronized String flushPendingSpeech() {
+    String tail = pendingSpeech.toString().trim();
+    pendingSpeech.setLength(0);
+    return tail;
+  }
   public boolean markStarted() { return started.compareAndSet(false, true); }
   public boolean backgroundRequested() { return backgroundRequested.get(); }
   public void requestBackground() { backgroundRequested.set(true); }
