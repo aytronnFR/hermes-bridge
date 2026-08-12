@@ -71,13 +71,13 @@ class AudioJobServiceTest {
                 return Flux.just("Bonjour.");
             }
         };
-        TtsClient tts = text -> Mono.just(new byte[] {1, 2, 3});
+        TtsClient tts = text -> Mono.delay(Duration.ofMillis(50)).thenReturn(new byte[] {1, 2, 3});
         AudioJobService streamingService = new AudioJobService(
                 Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
                 Duration.ofMinutes(10), gateway, tts);
         AudioJob job = streamingService.create("alexa-user", "alexa-device", "Bonjour");
 
         assertThat(streamingService.openStream(job.id(), job.token()).collectList().block())
-                .contains(new byte[] {1, 2, 3});
+                .containsExactly(new byte[] {1, 2, 3});
     }
 }

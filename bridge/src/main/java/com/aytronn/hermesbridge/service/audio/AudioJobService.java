@@ -108,9 +108,7 @@ public class AudioJobService {
           })
           .subscribe());
     }
-    Flux<byte[]> silence = Flux.interval(Duration.ZERO, Duration.ofMillis(500))
-        .map(ignored -> SilenceMp3.FRAME).takeUntilOther(job.completed().asMono());
-    return Flux.merge(job.audio().asFlux(), silence);
+    return job.audio().asFlux();
   }
 
   private void evictExpired() {
