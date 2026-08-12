@@ -293,6 +293,10 @@ Ok patron, je lance le job.
 
 See [docs/alexa-skill.md](docs/alexa-skill.md) for the detailed setup and [docs/architecture.md](docs/architecture.md) for the current integration boundary.
 
+For background jobs, set `DISCORD_WEBHOOK_URL` in the Bridge deployment secret.
+The URL is used only by the Bridge to publish the final result; it is never
+stored in source control or sent to Alexa.
+
 ## Logging
 
 The Java service uses SLF4J with Logback and emits one JSON event per line to stdout. This is intended for container log collection by Loki/Grafana. Request text, credentials, and other sensitive payloads are not logged.

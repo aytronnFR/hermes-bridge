@@ -46,6 +46,20 @@ test('starts a secure audio job and immediately returns an AudioPlayer directive
   assert.equal(result.response.shouldEndSession, true);
 });
 
+test('acknowledges an explicit background job without starting AudioPlayer', async () => {
+  global.fetch = async () => ({ ok: true, async json() { return {
+    jobId: 'job-2', streamUrl: 'https://bridge.example.test/stream', playbackToken: 'capability-2', background: true
+  }; } });
+
+  const result = await skill.handler(envelope({
+    intent: { name: 'SendTextIntent', slots: { message: { name: 'message', value: 'fais le rapport en arrière-plan' } } }
+  }), {});
+
+  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok patron, je lance le job en arrière-plan.</speak>');
+  assert.equal(result.response.directives, undefined);
+  assert.equal(result.response.shouldEndSession, true);
+});
+
 test('forwards stop to Bridge using the opaque playback token', async () => {
   let request;
   global.fetch = async (url, options) => {

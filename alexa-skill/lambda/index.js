@@ -28,6 +28,12 @@ const SendTextIntentHandler = {
     try {
       const bridgeResponse = await createAudioJob(handlerInput, text);
       activePlaybackTokens.set(alexaUserId(handlerInput), bridgeResponse.playbackToken);
+      if (bridgeResponse.background === true) {
+        return handlerInput.responseBuilder
+          .speak('Ok patron, je lance le job en arrière-plan.')
+          .withShouldEndSession(true)
+          .getResponse();
+      }
       return handlerInput.responseBuilder
         .speak('Ok patron, je lance le job.')
         .addAudioPlayerPlayDirective(

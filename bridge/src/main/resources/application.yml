@@ -19,6 +19,10 @@ tts:
   model: ${TTS_MODEL:kokoro}
   voice: ${TTS_VOICE:ff_siwis}
 
+discord:
+  webhook:
+    url: ${DISCORD_WEBHOOK_URL:}
+
 management:
   endpoints:
     web:

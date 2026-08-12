@@ -44,7 +44,7 @@ public class AlexaAudioController {
     String streamUrl = base.getScheme() + "://" + base.getAuthority()
         + "/v1/channels/alexa/audio/streams/" + job.id() + "?token=" + job.token();
     log.info("audio_job_response_created jobId={} scheme={} authority={}", job.id(), base.getScheme(), base.getAuthority());
-    return Mono.just(new AlexaAudioJobResponse(job.id(), streamUrl, capability));
+    return Mono.just(new AlexaAudioJobResponse(job.id(), streamUrl, capability, job.backgroundRequested()));
   }
 
   private URI publicBaseUrl(ServerWebExchange exchange) {
