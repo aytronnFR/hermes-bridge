@@ -77,7 +77,13 @@ de `TTS_BASE_URL` depuis le pod Bridge.
 
 ### 5. Mettre à jour la Lambda
 
-Archive puis déploie le contenu de `alexa-skill/lambda/` en conservant :
+Depuis `alexa-skill/lambda/`, crée l’archive de déploiement :
+
+```powershell
+npm run package
+```
+
+Charge ensuite `hermes-bridge-alexa.zip` dans la fonction Lambda en conservant :
 
 ```dotenv
 BRIDGE_URL=https://<domaine-public-du-bridge>

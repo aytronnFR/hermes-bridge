@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "check": "node --check index.js"
+    "check": "node --check index.js",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File ./package-lambda.ps1"
   },
   "dependencies": {
     "ask-sdk-core": "^2.14.0"

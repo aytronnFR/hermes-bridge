@@ -257,6 +257,15 @@ npm test
 npm run check
 ```
 
+Create the AWS Lambda upload archive on Windows:
+
+```powershell
+cd alexa-skill\lambda
+npm run package
+```
+
+This creates `hermes-bridge-alexa.zip` with production dependencies only.
+
 ## Alexa development
 
 The Alexa Skill is stored under `alexa-skill/` using the ASK CLI project layout. Its French invocation name is `hermes`. For short replies it can use the text turn endpoint; for long-running Hermes work it immediately starts a secure Alexa AudioPlayer stream through:
