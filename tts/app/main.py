@@ -7,6 +7,7 @@ from functools import lru_cache
 
 import numpy as np
 import soundfile as sf
+from app.audio_processing import ffmpeg_command
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -33,10 +34,7 @@ def synthesize_mp3(text: str, voice: str) -> bytes:
         raise ValueError("Kokoro produced no audio")
     wav = io.BytesIO()
     sf.write(wav, np.concatenate(chunks), 24000, format="WAV")
-    process = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-f", "mp3", "-b:a", "64k", "pipe:1"],
-        input=wav.getvalue(), capture_output=True, check=False,
-    )
+    process = subprocess.run(ffmpeg_command(), input=wav.getvalue(), capture_output=True, check=False)
     if process.returncode or not process.stdout:
         raise RuntimeError("MP3 encoding failed")
     return process.stdout
