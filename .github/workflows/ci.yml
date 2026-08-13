@@ -156,7 +156,11 @@ jobs:
   release:
     name: publish release
     needs: [changes, service]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.service.result == 'success' && contains(needs.changes.outputs.changed_services, 'bridge')
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.service.result == 'success' &&
+      (contains(needs.changes.outputs.changed_services, 'bridge') ||
+      contains(needs.changes.outputs.changed_services, 'tts'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
@@ -194,10 +198,17 @@ jobs:
         env:
           REGISTRY: ${{ env.REGISTRY }}
           IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
-          SERVICES_JSON: >-
-            [{"image":"hermes-bridge","values_file":"apps/hermes-bridge/values.yaml"}]
+          CHANGED_SERVICES: ${{ needs.changes.outputs.changed_services }}
         run: |
           set -euo pipefail
+
+          services='[]'
+          if jq -e 'index("bridge") != null' <<<"${CHANGED_SERVICES}" >/dev/null; then
+            services="$(jq -c '. + [{"image":"hermes-bridge","values_file":"apps/hermes-bridge/values.yaml"}]' <<<"${services}")"
+          fi
+          if jq -e 'index("tts") != null' <<<"${CHANGED_SERVICES}" >/dev/null; then
+            services="$(jq -c '. + [{"image":"hermes-kokoro","values_file":"apps/hermes-kokoro/values.yaml"}]' <<<"${services}")"
+          fi
 
           while IFS= read -r service; do
             image_name="$(jq -r '.image' <<<"${service}")"
@@ -220,11 +231,11 @@ jobs:
             image_tag="main-${short_revision}"
             IMAGE_TAG="${image_tag}" yq -i '.image.tag = strenv(IMAGE_TAG) | .image.tag style="double"' "${values_file}"
             echo "Resolved ${image} to ${image_tag} in ${values_file}"
-          done < <(jq -c '.[]' <<<"${SERVICES_JSON}")
+          done < <(jq -c '.[]' <<<"${services}")
 
           git config user.name "ci-bot"
           git config user.email "ci@aytronn.com"
-          git add apps/hermes-bridge/values.yaml
+          git add apps/hermes-bridge/values.yaml apps/hermes-kokoro/values.yaml
 
           if git diff --cached --quiet; then
             echo "No infrastructure change."
