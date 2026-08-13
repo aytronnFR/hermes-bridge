@@ -88,6 +88,43 @@ class AudioJobServiceTest {
     }
 
     @Test
+    void startsAnExplicitBackgroundJobWithoutAnAlexaAudioSubscription() {
+        AtomicReference<String> delivered = new AtomicReference<>();
+        HermesGatewayClient gateway = new HermesGatewayClient() {
+            @Override public Mono<String> submitTurn(String conversationId, String sessionKey, String text) { return Mono.empty(); }
+            @Override public Flux<String> streamTurn(String conversationId, String sessionKey, String text) {
+                return Flux.just("Rapport termine.");
+            }
+        };
+        AudioJobService streamingService = new AudioJobService(
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC), Duration.ofMinutes(10), gateway,
+            text -> Mono.just(new byte[] {1, 2, 3}), result -> { delivered.set(result); return Mono.empty(); });
+
+        streamingService.create("alexa-user", "alexa-device", "Fais le rapport en arrière-plan");
+
+        assertThat(delivered.get()).isEqualTo("Rapport termine.");
+    }
+
+    @Test
+    void createsAnAudioJobForTheLatestBackgroundResultOfTheSameAlexaDevice() {
+        HermesGatewayClient gateway = new HermesGatewayClient() {
+            @Override public Mono<String> submitTurn(String conversationId, String sessionKey, String text) { return Mono.empty(); }
+            @Override public Flux<String> streamTurn(String conversationId, String sessionKey, String text) {
+                return Flux.just("Rapport termine.");
+            }
+        };
+        AudioJobService streamingService = new AudioJobService(
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC), Duration.ofMinutes(10), gateway,
+            text -> Mono.just(text.getBytes()), result -> Mono.empty());
+        streamingService.create("alexa-user", "alexa-device", "Fais le rapport en arrière-plan");
+
+        AudioJob latest = streamingService.createLatest("alexa-user", "alexa-device");
+
+        assertThat(streamingService.openStream(latest.id(), latest.token()).collectList().block())
+            .containsExactly("Rapport termine.".getBytes());
+    }
+
+    @Test
     void synthesizesGatewayFragmentsAsOneCompleteSentence() {
         CopyOnWriteArrayList<String> synthesized = new CopyOnWriteArrayList<>();
         HermesGatewayClient gateway = new HermesGatewayClient() {

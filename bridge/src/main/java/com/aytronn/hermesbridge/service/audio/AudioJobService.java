@@ -28,6 +28,7 @@ public class AudioJobService {
   private final TtsClient ttsClient;
   private final BackgroundResultNotifier backgroundResultNotifier;
   private final Map<String, AudioJob> jobs = new ConcurrentHashMap<>();
+  private final Map<String, LatestResult> latestResults = new ConcurrentHashMap<>();
 
   public AudioJobService(Clock clock, Duration lifetime) {
     this(clock, lifetime, null, null, result -> Mono.empty());
@@ -48,6 +49,22 @@ public class AudioJobService {
 
   public AudioJob create(String userId, String deviceId, String text) {
     evictExpired();
+    AudioJob job = createJob(userId, deviceId, text, BACKGROUND_REQUEST.matcher(text).find(), null);
+    if (job.backgroundRequested() && gatewayClient != null && ttsClient != null) {
+      start(job);
+    }
+    return job;
+  }
+
+  public AudioJob createLatest(String userId, String deviceId) {
+    evictExpired();
+    LatestResult latest = latestResults.get(ownerKey(userId, deviceId));
+    if (latest == null || latest.expiresAt().isBefore(clock.instant())) throw new AudioJobNotFoundException();
+    return createJob(userId, deviceId, "", false, latest.text());
+  }
+
+  private AudioJob createJob(String userId, String deviceId, String text, boolean backgroundRequested,
+      String preparedResponse) {
     String id = UUID.randomUUID().toString();
     byte[] tokenBytes = new byte[32];
     RANDOM.nextBytes(tokenBytes);
@@ -58,7 +75,8 @@ public class AudioJobService {
         deviceId,
         text,
         clock.instant().plus(lifetime),
-        BACKGROUND_REQUEST.matcher(text).find()
+        backgroundRequested,
+        preparedResponse
     );
     jobs.put(id, job);
     log.info("audio_job_created jobId={}", job.id());
@@ -100,10 +118,21 @@ public class AudioJobService {
   public Flux<byte[]> openStream(String id, String token) {
     AudioJob job = resolve(id, token);
     if (gatewayClient == null || ttsClient == null) throw new IllegalStateException("Audio streaming is not configured");
+    start(job);
+    Flux<byte[]> waitingMusic = Flux.interval(Duration.ZERO, Duration.ofMillis(350))
+        .map(ignored -> SilenceMp3.SEGMENT)
+        .takeUntilOther(Mono.firstWithSignal(job.speechStarted().asMono(), job.completed().asMono()));
+    return Flux.merge(waitingMusic, job.audio().asFlux());
+  }
+
+  private void start(AudioJob job) {
     if (job.markStarted()) {
       log.info("audio_stream_opened jobId={}", job.id());
-      job.upstream(new HermesStreamDirectiveParser().parse(
-              gatewayClient.streamTurn("alexa:" + job.ownerDeviceId(), "alexa:" + job.ownerDeviceId(), job.text()))
+      Flux<HermesStreamEvent> events = job.preparedResponse() == null
+          ? new HermesStreamDirectiveParser().parse(gatewayClient.streamTurn("alexa:" + job.ownerDeviceId(),
+              "alexa:" + job.ownerDeviceId(), job.text()))
+          : Flux.just(new HermesStreamEvent.Text(job.preparedResponse()));
+      job.upstream(events
           .concatMap(event -> handleEvent(job, event))
           .concatWith(Flux.defer(() -> flushFinalSentence(job)))
           .concatWith(Mono.defer(() -> publishBackgroundResult(job)))
@@ -123,10 +152,6 @@ public class AudioJobService {
           })
           .subscribe());
     }
-    Flux<byte[]> waitingMusic = Flux.interval(Duration.ZERO, Duration.ofMillis(350))
-        .map(ignored -> SilenceMp3.SEGMENT)
-        .takeUntilOther(Mono.firstWithSignal(job.speechStarted().asMono(), job.completed().asMono()));
-    return Flux.merge(waitingMusic, job.audio().asFlux());
   }
 
   private Flux<byte[]> handleEvent(AudioJob job, HermesStreamEvent event) {
@@ -152,13 +177,20 @@ public class AudioJobService {
 
   private Mono<byte[]> publishBackgroundResult(AudioJob job) {
     if (!job.backgroundRequested() || job.finalResult().isBlank()) return Mono.empty();
+    latestResults.put(ownerKey(job.ownerUserId(), job.ownerDeviceId()),
+        new LatestResult(job.finalResult(), job.expiresAt()));
     return backgroundResultNotifier.publish(job.finalResult()).then(Mono.empty());
   }
 
   private void evictExpired() {
     Instant now = clock.instant();
     jobs.values().removeIf(job -> job.expiresAt().isBefore(now));
+    latestResults.values().removeIf(result -> result.expiresAt().isBefore(now));
   }
+
+  private static String ownerKey(String userId, String deviceId) { return userId + "\u0000" + deviceId; }
+
+  private record LatestResult(String text, Instant expiresAt) { }
 
   private static boolean constantTimeEquals(String expected, String supplied) {
     if (supplied == null) {

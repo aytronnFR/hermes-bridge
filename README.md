@@ -84,6 +84,16 @@ the same behavior explicitly by saying `en arrière-plan`; in that case the
 Lambda does not start an AudioPlayer stream and the final answer is sent to
 Discord through `DISCORD_WEBHOOK_URL`.
 
+To replay the last completed background result on the same Echo, say:
+
+```text
+Alexa, ouvre Hermes, puis envoie dernier résultat
+```
+
+The current proof of concept retains this result in Bridge memory for the job
+lifetime (ten minutes), so it is unavailable after its expiry or a Bridge
+restart. Persistent result history is a future dashboard feature.
+
 See [docs/alexa-live-audio.md](docs/alexa-live-audio.md) and
 [docs/alexa-background-results.md](docs/alexa-background-results.md) for the
 complete runtime and security contracts.

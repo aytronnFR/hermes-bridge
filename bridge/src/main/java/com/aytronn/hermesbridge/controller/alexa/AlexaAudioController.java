@@ -3,6 +3,7 @@ package com.aytronn.hermesbridge.controller.alexa;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioCancelRequest;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioJobRequest;
 import com.aytronn.hermesbridge.dto.alexa.AlexaAudioJobResponse;
+import com.aytronn.hermesbridge.dto.alexa.AlexaAudioLatestRequest;
 import com.aytronn.hermesbridge.config.BridgePublicUrlProperties;
 import com.aytronn.hermesbridge.service.audio.AudioJob;
 import com.aytronn.hermesbridge.service.audio.AudioJobService;
@@ -39,12 +40,23 @@ public class AlexaAudioController {
   public Mono<AlexaAudioJobResponse> create(@Valid @RequestBody AlexaAudioJobRequest request,
       ServerWebExchange exchange) {
     AudioJob job = jobs.create(request.userId(), request.deviceId(), request.text());
+    return Mono.just(response(job, exchange));
+  }
+
+  @PostMapping("/latest")
+  public Mono<AlexaAudioJobResponse> latest(@Valid @RequestBody AlexaAudioLatestRequest request,
+      ServerWebExchange exchange) {
+    AudioJob job = jobs.createLatest(request.userId(), request.deviceId());
+    return Mono.just(response(job, exchange));
+  }
+
+  private AlexaAudioJobResponse response(AudioJob job, ServerWebExchange exchange) {
     String capability = encode(job.id(), job.token());
     URI base = publicBaseUrl(exchange);
     String streamUrl = base.getScheme() + "://" + base.getAuthority()
         + "/v1/channels/alexa/audio/streams/" + job.id() + "?token=" + job.token();
     log.info("audio_job_response_created jobId={} scheme={} authority={}", job.id(), base.getScheme(), base.getAuthority());
-    return Mono.just(new AlexaAudioJobResponse(job.id(), streamUrl, capability, job.backgroundRequested()));
+    return new AlexaAudioJobResponse(job.id(), streamUrl, capability, job.backgroundRequested());
   }
 
   private URI publicBaseUrl(ServerWebExchange exchange) {

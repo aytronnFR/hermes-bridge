@@ -60,6 +60,24 @@ test('acknowledges an explicit background job without starting AudioPlayer', asy
   assert.equal(result.response.shouldEndSession, true);
 });
 
+test('reads the latest background result as an AudioPlayer stream', async () => {
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options };
+    return { ok: true, async json() { return {
+      jobId: 'latest-1', streamUrl: 'https://bridge.example.test/stream/latest', playbackToken: 'latest-capability'
+    }; } };
+  };
+
+  const result = await skill.handler(envelope({
+    intent: { name: 'SendTextIntent', slots: { message: { name: 'message', value: 'dernier résultat' } } }
+  }), {});
+
+  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/audio/latest');
+  assert.deepEqual(JSON.parse(request.options.body), { userId: 'user-1', deviceId: 'device-1' });
+  assert.equal(result.response.directives[0].type, 'AudioPlayer.Play');
+});
+
 test('forwards stop to Bridge using the opaque playback token', async () => {
   let request;
   global.fetch = async (url, options) => {

@@ -26,7 +26,9 @@ const SendTextIntentHandler = {
     const text = Alexa.getSlotValue(handlerInput.requestEnvelope, 'message');
 
     try {
-      const bridgeResponse = await createAudioJob(handlerInput, text);
+      const bridgeResponse = isLatestResultRequest(text)
+        ? await createLatestAudioJob(handlerInput)
+        : await createAudioJob(handlerInput, text);
       activePlaybackTokens.set(alexaUserId(handlerInput), bridgeResponse.playbackToken);
       if (bridgeResponse.background === true) {
         return handlerInput.responseBuilder
@@ -179,6 +181,37 @@ async function createAudioJob(handlerInput, text) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function createLatestAudioJob(handlerInput) {
+  return createBridgeAudioRequest(handlerInput, '/v1/channels/alexa/audio/latest', {});
+}
+
+function isLatestResultRequest(text) {
+  return typeof text === 'string' && /^dernier r[ée]sultat[ .!?]*$/iu.test(text.trim());
+}
+
+async function createBridgeAudioRequest(handlerInput, path, body) {
+  if (!BRIDGE_URL) throw new Error('BRIDGE_URL is not configured');
+  if (!BRIDGE_API_KEY) throw new Error('BRIDGE_API_KEY is not configured');
+  const system = handlerInput.requestEnvelope.context?.System || {};
+  const deviceId = system.device?.deviceId;
+  const userId = system.user?.userId;
+  if (!deviceId || !userId) throw new Error('Alexa user and device identifiers are required');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${BRIDGE_URL.replace(/\/$/, '')}${path}`, {
+      method: 'POST', headers: { authorization: `Bearer ${BRIDGE_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, userId, deviceId }), signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Bridge returned HTTP ${response.status}`);
+    const responseBody = await response.json();
+    if (!responseBody || typeof responseBody.streamUrl !== 'string' || typeof responseBody.playbackToken !== 'string') {
+      throw new Error('Bridge returned an invalid response');
+    }
+    return responseBody;
+  } finally { clearTimeout(timeout); }
 }
 
 async function cancelAudioJob(handlerInput) {

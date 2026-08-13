@@ -11,6 +11,7 @@ public final class AudioJob {
   private final String ownerUserId;
   private final String ownerDeviceId;
   private final String text;
+  private final String preparedResponse;
   private final Instant expiresAt;
   private final Sinks.Many<byte[]> audio = Sinks.many().replay().all();
   private final Sinks.One<Void> completed = Sinks.one();
@@ -22,12 +23,13 @@ public final class AudioJob {
   private volatile Disposable upstream;
 
   public AudioJob(String id, String token, String ownerUserId, String ownerDeviceId, String text, Instant expiresAt,
-      boolean backgroundRequested) {
+      boolean backgroundRequested, String preparedResponse) {
     this.id = id;
     this.token = token;
     this.ownerUserId = ownerUserId;
     this.ownerDeviceId = ownerDeviceId;
     this.text = text;
+    this.preparedResponse = preparedResponse;
     this.expiresAt = expiresAt;
     this.backgroundRequested = new AtomicBoolean(backgroundRequested);
   }
@@ -36,6 +38,7 @@ public final class AudioJob {
   public String ownerUserId() { return ownerUserId; }
   public String ownerDeviceId() { return ownerDeviceId; }
   public String text() { return text; }
+  public String preparedResponse() { return preparedResponse; }
   public Instant expiresAt() { return expiresAt; }
   public Sinks.Many<byte[]> audio() { return audio; }
   public Sinks.One<Void> completed() { return completed; }
