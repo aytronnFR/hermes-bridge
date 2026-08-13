@@ -25,6 +25,6 @@ public class ReactorNettyTtsClient implements TtsClient {
         .accept(MediaType.valueOf("audio/mpeg"))
         .bodyValue(Map.of("model", properties.model(), "voice", properties.voice(), "input", text,
             "response_format", "mp3"))
-        .retrieve().bodyToMono(byte[].class).timeout(Duration.ofSeconds(30));
+        .retrieve().bodyToMono(byte[].class).timeout(Duration.ofSeconds(properties.timeoutSeconds()));
   }
 }

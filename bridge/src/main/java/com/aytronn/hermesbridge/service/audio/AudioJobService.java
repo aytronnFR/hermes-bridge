@@ -150,7 +150,7 @@ public class AudioJobService {
             job.audio().tryEmitComplete();
             job.completed().tryEmitEmpty();
           })
-          .subscribe());
+          .subscribe(ignored -> { }, error -> { }));
     }
   }
 

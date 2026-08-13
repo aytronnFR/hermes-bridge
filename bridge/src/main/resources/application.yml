@@ -18,6 +18,7 @@ tts:
   base-url: ${TTS_BASE_URL:http://hermes-kokoro:8880}
   model: ${TTS_MODEL:kokoro}
   voice: ${TTS_VOICE:ff_siwis}
+  timeout-seconds: ${TTS_TIMEOUT_SECONDS:90}
 
 discord:
   webhook:
