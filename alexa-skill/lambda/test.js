@@ -78,6 +78,56 @@ test('reads the latest background result as an AudioPlayer stream', async () => 
   assert.equal(result.response.directives[0].type, 'AudioPlayer.Play');
 });
 
+test('reads the latest result through the dedicated Alexa command', async () => {
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options };
+    return { ok: true, async json() { return {
+      jobId: 'latest-command-1', streamUrl: 'https://bridge.example.test/stream/latest', playbackToken: 'latest-command-capability'
+    }; } };
+  };
+
+  const result = await skill.handler(envelope({
+    intent: { name: 'LatestMessageIntent', slots: {} }
+  }), {});
+
+  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/audio/latest');
+  assert.equal(result.response.directives[0].type, 'AudioPlayer.Play');
+});
+
+test('starts a new Hermes conversation for the current Alexa device', async () => {
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options };
+    return { ok: true, async json() { return {}; } };
+  };
+
+  const result = await skill.handler(envelope({
+    intent: { name: 'NewConversationIntent', slots: {} }
+  }), {});
+
+  assert.equal(request.url, 'https://bridge.example.test/v1/channels/alexa/conversations/reset');
+  assert.deepEqual(JSON.parse(request.options.body), { userId: 'user-1', deviceId: 'device-1' });
+  assert.equal(result.response.outputSpeech.ssml,
+    '<speak>C’est bon patron, on repart sur une nouvelle conversation.</speak>');
+  assert.equal(result.response.shouldEndSession, true);
+});
+
+test('accepts an empty reset response from the Bridge', async () => {
+  global.fetch = async () => ({
+    ok: true,
+    headers: { get() { return null; } },
+    async json() { throw new Error('empty response must not be parsed'); }
+  });
+
+  const result = await skill.handler(envelope({
+    intent: { name: 'NewConversationIntent', slots: {} }
+  }), {});
+
+  assert.equal(result.response.outputSpeech.ssml,
+    '<speak>C’est bon patron, on repart sur une nouvelle conversation.</speak>');
+});
+
 test('forwards stop to Bridge using the opaque playback token', async () => {
   let request;
   global.fetch = async (url, options) => {

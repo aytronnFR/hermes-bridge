@@ -53,6 +53,53 @@ const SendTextIntentHandler = {
   }
 };
 
+const NewConversationIntentHandler = {
+  canHandle(handlerInput) {
+    return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+      && Alexa.getIntentName(handlerInput.requestEnvelope) === 'NewConversationIntent';
+  },
+  async handle(handlerInput) {
+    try {
+      await resetConversation(handlerInput);
+      return handlerInput.responseBuilder
+        .speak('C’est bon patron, on repart sur une nouvelle conversation.')
+        .withShouldEndSession(true)
+        .getResponse();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'conversation_reset_failed', error: error.message }));
+      return handlerInput.responseBuilder
+        .speak('Je n’ai pas réussi à démarrer une nouvelle conversation.')
+        .getResponse();
+    }
+  }
+};
+
+const LatestMessageIntentHandler = {
+  canHandle(handlerInput) {
+    return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+      && Alexa.getIntentName(handlerInput.requestEnvelope) === 'LatestMessageIntent';
+  },
+  async handle(handlerInput) {
+    try {
+      const bridgeResponse = await createLatestAudioJob(handlerInput);
+      activePlaybackTokens.set(alexaUserId(handlerInput), bridgeResponse.playbackToken);
+      return handlerInput.responseBuilder
+        .speak('Voici le dernier message.')
+        .addAudioPlayerPlayDirective(
+          'REPLACE_ALL', bridgeResponse.streamUrl, bridgeResponse.playbackToken, 0, null,
+          { title: 'Hermes', subtitle: 'Dernier message' }
+        )
+        .withShouldEndSession(true)
+        .getResponse();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'latest_message_failed', error: error.message }));
+      return handlerInput.responseBuilder
+        .speak('Je n’ai pas de dernier message à lire.')
+        .getResponse();
+    }
+  }
+};
+
 const HelpIntentHandler = {
   canHandle(handlerInput) {
     return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
@@ -187,11 +234,23 @@ async function createLatestAudioJob(handlerInput) {
   return createBridgeAudioRequest(handlerInput, '/v1/channels/alexa/audio/latest', {});
 }
 
+async function resetConversation(handlerInput) {
+  await postBridgeRequest(handlerInput, '/v1/channels/alexa/conversations/reset', {});
+}
+
 function isLatestResultRequest(text) {
   return typeof text === 'string' && /^dernier r[ée]sultat[ .!?]*$/iu.test(text.trim());
 }
 
 async function createBridgeAudioRequest(handlerInput, path, body) {
+  const responseBody = await postBridgeRequest(handlerInput, path, body);
+  if (!responseBody || typeof responseBody.streamUrl !== 'string' || typeof responseBody.playbackToken !== 'string') {
+    throw new Error('Bridge returned an invalid response');
+  }
+  return responseBody;
+}
+
+async function postBridgeRequest(handlerInput, path, body) {
   if (!BRIDGE_URL) throw new Error('BRIDGE_URL is not configured');
   if (!BRIDGE_API_KEY) throw new Error('BRIDGE_API_KEY is not configured');
   const system = handlerInput.requestEnvelope.context?.System || {};
@@ -206,11 +265,10 @@ async function createBridgeAudioRequest(handlerInput, path, body) {
       body: JSON.stringify({ ...body, userId, deviceId }), signal: controller.signal
     });
     if (!response.ok) throw new Error(`Bridge returned HTTP ${response.status}`);
-    const responseBody = await response.json();
-    if (!responseBody || typeof responseBody.streamUrl !== 'string' || typeof responseBody.playbackToken !== 'string') {
-      throw new Error('Bridge returned an invalid response');
+    if (typeof response.headers?.get === 'function') {
+      return response.headers.get('content-type')?.includes('application/json') ? response.json() : {};
     }
-    return responseBody;
+    return typeof response.json === 'function' ? response.json() : {};
   } finally { clearTimeout(timeout); }
 }
 
@@ -241,6 +299,8 @@ const skill = Alexa.SkillBuilders.custom()
   .addRequestHandlers(
     LaunchRequestHandler,
     SendTextIntentHandler,
+    NewConversationIntentHandler,
+    LatestMessageIntentHandler,
     HelpIntentHandler,
     ExitIntentHandler,
     FallbackIntentHandler,

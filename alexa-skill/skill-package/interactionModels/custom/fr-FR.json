@@ -23,6 +23,24 @@
           "samples": []
         },
         {
+          "name": "NewConversationIntent",
+          "samples": [
+            "nouveau chat",
+            "nouvelle conversation",
+            "réinitialise la conversation",
+            "recommence la conversation"
+          ]
+        },
+        {
+          "name": "LatestMessageIntent",
+          "samples": [
+            "dernier message",
+            "lis le dernier message",
+            "dernier résultat",
+            "lis le dernier résultat"
+          ]
+        },
+        {
           "name": "AMAZON.HelpIntent",
           "samples": []
         },

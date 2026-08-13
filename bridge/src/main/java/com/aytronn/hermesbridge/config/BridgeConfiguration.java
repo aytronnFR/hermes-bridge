@@ -30,9 +30,9 @@ public class BridgeConfiguration {
 
   @Bean
   AudioJobService audioJobService(HermesGatewayClient gatewayClient, TtsClient ttsClient,
-      BackgroundResultNotifier backgroundResultNotifier) {
+      BackgroundResultNotifier backgroundResultNotifier, AlexaConversationService conversationService) {
     return new AudioJobService(Clock.systemUTC(), Duration.ofMinutes(10), gatewayClient, ttsClient,
-        backgroundResultNotifier);
+        backgroundResultNotifier, conversationService);
   }
 
   @Bean

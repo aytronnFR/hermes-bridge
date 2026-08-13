@@ -2,6 +2,7 @@ package com.aytronn.hermesbridge.controller.alexa;
 
 import com.aytronn.hermesbridge.dto.alexa.AlexaTurnRequest;
 import com.aytronn.hermesbridge.dto.alexa.AlexaTurnResponse;
+import com.aytronn.hermesbridge.dto.alexa.AlexaConversationResetRequest;
 import com.aytronn.hermesbridge.service.alexa.AlexaConversationService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,12 @@ public class AlexaTurnController {
       log.info("Alexa turn received");
       return conversationService.turn(request);
     }
+  }
+
+  @PostMapping(value = "/conversations/reset", consumes = MediaType.APPLICATION_JSON_VALUE)
+  public Mono<Void> resetConversation(@Valid @RequestBody AlexaConversationResetRequest request) {
+    conversationService.resetConversation(request.userId(), request.deviceId());
+    return Mono.empty();
   }
 
   private static String safe(String value) {

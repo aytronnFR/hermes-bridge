@@ -15,7 +15,7 @@ TTS_VOICE=ff_siwis
 DISCORD_WEBHOOK_URL=<optional background-result webhook>
 ```
 
-The bridge sends `alexa:<deviceId>` as the Hermes named conversation and session key. Hermes retains one conversation per physical Alexa device, including across bridge restarts. Credentials and prompts are never logged.
+The bridge retains one Hermes conversation per physical Alexa device. Say `nouveau chat` to start a fresh conversation for the current Echo; this mapping is kept in Bridge memory and is reset when the Bridge restarts. Credentials and prompts are never logged.
 
 Hermes Bridge is an open-source channel adapter for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
@@ -41,6 +41,7 @@ The bridge exposes:
 
 ```http
 POST /v1/channels/alexa/turn
+POST /v1/channels/alexa/conversations/reset
 POST /v1/channels/alexa/audio/jobs
 POST /v1/channels/alexa/audio/cancel
 GET  /actuator/health
@@ -87,7 +88,7 @@ Discord through `DISCORD_WEBHOOK_URL`.
 To replay the last completed background result on the same Echo, say:
 
 ```text
-Alexa, ouvre Hermes, puis envoie dernier résultat
+Alexa, ouvre Hermes, puis dernier message
 ```
 
 The current proof of concept retains this result in Bridge memory for the job
@@ -331,6 +332,7 @@ Example utterances:
 ```text
 Alexa, ouvre Hermes
 Alexa, envoie bonjour
+Alexa, nouveau chat
 ```
 
 The complete deployment sequence, audio-stream security contract, cancellation behaviour, and physical-Echo test plan are in [docs/alexa-live-audio.md](docs/alexa-live-audio.md).

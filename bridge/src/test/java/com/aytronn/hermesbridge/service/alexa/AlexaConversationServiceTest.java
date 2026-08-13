@@ -33,4 +33,21 @@ class AlexaConversationServiceTest {
         assertThat(conversation).hasValue("alexa:device-1");
         assertThat(sessionKey).hasValue("alexa:device-1");
     }
+
+    @Test
+    void createsANewConversationKeyForTheAlexaDeviceAfterReset() {
+        AlexaConversationService service = new AlexaConversationService(new HermesGatewayClient() {
+            @Override
+            public Mono<String> submitTurn(String conversationId, String hermesSessionKey, String text) {
+                return Mono.just("Bien reçu chef");
+            }
+        });
+
+        String previous = service.conversationId("user-1", "device-1");
+        String current = service.resetConversation("user-1", "device-1");
+
+        assertThat(previous).isEqualTo("alexa:device-1");
+        assertThat(current).startsWith("alexa:").isNotEqualTo(previous);
+        assertThat(service.conversationId("user-1", "device-1")).isEqualTo(current);
+    }
 }

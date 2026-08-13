@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
 import com.aytronn.hermesbridge.service.hermes.HermesGatewayClient;
+import com.aytronn.hermesbridge.service.alexa.AlexaConversationService;
 import com.aytronn.hermesbridge.service.tts.TtsClient;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
@@ -193,5 +194,27 @@ class AudioJobServiceTest {
                 .containsExactly(new byte[] {1, 2, 3});
         assertThat(streamingService.openStream(job.id(), job.token()).collectList().block())
                 .containsExactly(new byte[] {1, 2, 3});
+    }
+
+    @Test
+    void usesTheResetConversationKeyForTheNextAudioJob() {
+        AtomicReference<String> conversation = new AtomicReference<>();
+        HermesGatewayClient gateway = new HermesGatewayClient() {
+            @Override public Mono<String> submitTurn(String conversationId, String sessionKey, String text) { return Mono.empty(); }
+            @Override public Flux<String> streamTurn(String conversationId, String sessionKey, String text) {
+                conversation.set(conversationId);
+                return Flux.just("Bonjour.");
+            }
+        };
+        AlexaConversationService conversations = new AlexaConversationService(gateway);
+        String resetConversation = conversations.resetConversation("alexa-user", "alexa-device");
+        AudioJobService streamingService = new AudioJobService(
+            Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC), Duration.ofMinutes(10), gateway,
+            text -> Mono.just(new byte[] {1, 2, 3}), result -> Mono.empty(), conversations);
+
+        AudioJob job = streamingService.create("alexa-user", "alexa-device", "Bonjour");
+        streamingService.openStream(job.id(), job.token()).collectList().block();
+
+        assertThat(conversation).hasValue(resetConversation);
     }
 }

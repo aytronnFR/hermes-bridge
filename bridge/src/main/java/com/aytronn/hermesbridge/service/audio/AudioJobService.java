@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import com.aytronn.hermesbridge.service.hermes.HermesGatewayClient;
+import com.aytronn.hermesbridge.service.alexa.AlexaConversationService;
 import com.aytronn.hermesbridge.service.notification.BackgroundResultNotifier;
 import com.aytronn.hermesbridge.service.tts.TtsClient;
 import lombok.extern.slf4j.Slf4j;
@@ -27,24 +28,31 @@ public class AudioJobService {
   private final HermesGatewayClient gatewayClient;
   private final TtsClient ttsClient;
   private final BackgroundResultNotifier backgroundResultNotifier;
+  private final AlexaConversationService conversationService;
   private final Map<String, AudioJob> jobs = new ConcurrentHashMap<>();
   private final Map<String, LatestResult> latestResults = new ConcurrentHashMap<>();
 
   public AudioJobService(Clock clock, Duration lifetime) {
-    this(clock, lifetime, null, null, result -> Mono.empty());
+    this(clock, lifetime, null, null, result -> Mono.empty(), null);
   }
 
   public AudioJobService(Clock clock, Duration lifetime, HermesGatewayClient gatewayClient, TtsClient ttsClient) {
-    this(clock, lifetime, gatewayClient, ttsClient, result -> Mono.empty());
+    this(clock, lifetime, gatewayClient, ttsClient, result -> Mono.empty(), null);
   }
 
   public AudioJobService(Clock clock, Duration lifetime, HermesGatewayClient gatewayClient, TtsClient ttsClient,
       BackgroundResultNotifier backgroundResultNotifier) {
+    this(clock, lifetime, gatewayClient, ttsClient, backgroundResultNotifier, null);
+  }
+
+  public AudioJobService(Clock clock, Duration lifetime, HermesGatewayClient gatewayClient, TtsClient ttsClient,
+      BackgroundResultNotifier backgroundResultNotifier, AlexaConversationService conversationService) {
     this.clock = clock;
     this.lifetime = lifetime;
     this.gatewayClient = gatewayClient;
     this.ttsClient = ttsClient;
     this.backgroundResultNotifier = backgroundResultNotifier;
+    this.conversationService = conversationService;
   }
 
   public AudioJob create(String userId, String deviceId, String text) {
@@ -129,8 +137,8 @@ public class AudioJobService {
     if (job.markStarted()) {
       log.info("audio_stream_opened jobId={}", job.id());
       Flux<HermesStreamEvent> events = job.preparedResponse() == null
-          ? new HermesStreamDirectiveParser().parse(gatewayClient.streamTurn("alexa:" + job.ownerDeviceId(),
-              "alexa:" + job.ownerDeviceId(), job.text()))
+          ? new HermesStreamDirectiveParser().parse(gatewayClient.streamTurn(conversationId(job),
+              conversationId(job), job.text()))
           : Flux.just(new HermesStreamEvent.Text(job.preparedResponse()));
       job.upstream(events
           .concatMap(event -> handleEvent(job, event))
@@ -152,6 +160,11 @@ public class AudioJobService {
           })
           .subscribe(ignored -> { }, error -> { }));
     }
+  }
+
+  private String conversationId(AudioJob job) {
+    if (conversationService == null) return "alexa:" + job.ownerDeviceId();
+    return conversationService.conversationId(job.ownerUserId(), job.ownerDeviceId());
   }
 
   private Flux<byte[]> handleEvent(AudioJob job, HermesStreamEvent event) {
