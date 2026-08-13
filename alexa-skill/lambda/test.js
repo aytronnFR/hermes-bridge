@@ -39,7 +39,7 @@ test('starts a secure audio job and immediately returns an AudioPlayer directive
   assert.deepEqual(JSON.parse(request.options.body), {
     text: 'bonjour', userId: 'user-1', deviceId: 'device-1'
   });
-  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok patron, je lance le job.</speak>');
+  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok.</speak>');
   assert.equal(result.response.directives[0].type, 'AudioPlayer.Play');
   assert.equal(result.response.directives[0].audioItem.stream.url,
     'https://bridge.example.test/v1/channels/alexa/audio/streams/job-1?token=opaque');
@@ -55,7 +55,7 @@ test('acknowledges an explicit background job without starting AudioPlayer', asy
     intent: { name: 'SendTextIntent', slots: { message: { name: 'message', value: 'fais le rapport en arrière-plan' } } }
   }), {});
 
-  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok patron, je lance le job en arrière-plan.</speak>');
+  assert.equal(result.response.outputSpeech.ssml, '<speak>Ok.</speak>');
   assert.equal(result.response.directives, undefined);
   assert.equal(result.response.shouldEndSession, true);
 });

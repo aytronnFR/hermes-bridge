@@ -32,12 +32,12 @@ const SendTextIntentHandler = {
       activePlaybackTokens.set(alexaUserId(handlerInput), bridgeResponse.playbackToken);
       if (bridgeResponse.background === true) {
         return handlerInput.responseBuilder
-          .speak('Ok patron, je lance le job en arrière-plan.')
+          .speak('Ok.')
           .withShouldEndSession(true)
           .getResponse();
       }
       return handlerInput.responseBuilder
-        .speak('Ok patron, je lance le job.')
+        .speak('Ok.')
         .addAudioPlayerPlayDirective(
           'REPLACE_ALL', bridgeResponse.streamUrl, bridgeResponse.playbackToken, 0, null,
           { title: 'Hermes', subtitle: 'Réponse en cours' }
