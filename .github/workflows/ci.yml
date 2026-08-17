@@ -137,7 +137,7 @@ jobs:
       - name: Extract Docker metadata
         if: matrix.kind != 'node' && contains(needs.changes.outputs.changed_services, matrix.component)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
           tags: |
