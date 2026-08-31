@@ -95,7 +95,7 @@ jobs:
 
       - name: Set up Java
         if: matrix.kind == 'java' && contains(needs.changes.outputs.changed_services, matrix.component)
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
